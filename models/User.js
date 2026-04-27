@@ -1,0 +1,78 @@
+const mongoose = require('mongoose');
+
+const userSchema = new mongoose.Schema({
+  userId: {
+    type: String,
+    required: true,
+    unique: true,
+    index: true,
+  },
+  email: {
+    type: String,
+    required: true,
+    unique: true,
+    lowercase: true,
+    trim: true,
+  },
+  passwordHash: {
+    type: String,
+    required: true,
+  },
+  firstName: {
+    type: String,
+    trim: true,
+  },
+  lastName: {
+    type: String,
+    trim: true,
+  },
+  profilePicture: {
+    type: String,
+    trim: true,
+  },
+  bio: {
+    type: String,
+  },
+  countryId: {
+    type: String,
+    trim: true,
+    ref: 'Country',
+  },
+  cityId: {
+    type: String,
+    trim: true,
+    ref: 'City',
+  },
+  languages: {
+    type: [String],
+    default: [],
+  },
+  role: {
+    type: String,
+    enum: ['LEARNER', 'MENTOR', 'ADMIN'],
+    default: 'LEARNER',
+  },
+  accountStatus: {
+    type: String,
+    enum: ['ACTIVE', 'SUSPENDED', 'BANNED'],
+    uppercase: true,
+    default: 'ACTIVE',
+  },
+  emailVerified: {
+    type: Boolean,
+    default: false,
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now,
+  },
+  lastLogin: {
+    type: Date,
+  },
+  timeCredits: {
+    type: mongoose.Schema.Types.Decimal128,
+    default: () => mongoose.Types.Decimal128.fromString('0'),
+  },
+});
+
+module.exports = mongoose.models.User || mongoose.model('User', userSchema);
