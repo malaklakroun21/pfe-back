@@ -165,6 +165,7 @@ Copy `.env.example` to `.env` and fill in the values:
 | `JWT_SECRET`   | *(required)*                               | Secret key for signing JWT tokens    |
 | `JWT_EXPIRE`   | `7d`                                       | Token expiration duration            |
 | `CLIENT_URL`   | `http://localhost:3000`                    | Allowed CORS origin (frontend URL)   |
+| `BCRYPT_SALT_ROUNDS` | `10`                               | Number of bcrypt hashing rounds      |
 
 ---
 
