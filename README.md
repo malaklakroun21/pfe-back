@@ -92,6 +92,9 @@ npm install
 cp .env.example .env
 # Edit .env with your values (see Environment Variables section below)
 
+# Optional: seed the database with demo data
+npm run seed
+
 # Start development server
 npm run dev
 ```
@@ -116,6 +119,7 @@ pfe-back/
 ├── .env.example            # Environment variable template
 ├── .eslintrc.json          # Linting rules
 ├── .prettierrc             # Code formatting rules
+├── scripts/                # Operational scripts (database seeding, maintenance)
 │
 ├── src/
 │   ├── app.js              # Express app setup (middleware, routes)
@@ -174,6 +178,8 @@ Copy `.env.example` to `.env` and fill in the values:
 ```bash
 npm start          # Start production server (node server.js)
 npm run dev        # Start development server with auto-reload (nodemon)
+npm run seed       # Create or update the demo database seed
+npm run seed:reset # Clear seeded collections, then insert demo data
 npm test           # Run test suite (Jest)
 npm run test:watch # Run tests in watch mode
 npm run lint       # Lint source files with ESLint
