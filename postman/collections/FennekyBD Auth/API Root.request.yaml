@@ -1,0 +1,5 @@
+$kind: http-request
+description: Checks that the API v1 router is mounted.
+url: "{{baseUrl}}/api/v1"
+method: GET
+order: 2000

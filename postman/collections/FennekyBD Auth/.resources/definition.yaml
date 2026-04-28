@@ -1,0 +1,8 @@
+$kind: collection
+name: FennekyBD Auth
+description: Basic requests for testing the local FennekyBD API.
+variables:
+  baseUrl: http://localhost:5000
+  authEmail: tesnim@example.com
+  authPassword: Password123!
+  accessToken: ""

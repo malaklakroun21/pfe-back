@@ -1,0 +1,5 @@
+$kind: http-request
+description: Verifies that the Express server is up.
+url: "{{baseUrl}}/health"
+method: GET
+order: 1000

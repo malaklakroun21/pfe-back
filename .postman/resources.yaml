@@ -1,0 +1,15 @@
+# Use this workspace to collaborate
+workspace:
+  id: cfd6c4bc-ea19-46bf-8634-06e7199e253b
+
+# Each entry here maps a local resource to one or more corresponding objects in Postman Cloud
+
+cloudResources:
+  collections:
+    ..\postman\collections\FennekyBD Auth: 7e9ea92e-04da-4c74-a4f9-fdd4a0435a0d
+
+# All resources in the `postman/` folder are automatically registered in Local View.
+# Point to additional files outside the `postman/` folder to register them individually. Example:
+#localResources:
+#  collections:
+#    - ../tests/E2E Test Collection/
