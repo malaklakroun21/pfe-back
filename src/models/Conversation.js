@@ -38,6 +38,9 @@ const conversationSchema = new mongoose.Schema(
   }
 );
 
+conversationSchema.index({ participant1Id: 1, participant2Id: 1 }, { unique: true });
+conversationSchema.index({ lastMessageAt: -1, createdAt: -1 });
+
 module.exports =
   mongoose.models.Conversation ||
   mongoose.model('Conversation', conversationSchema);
