@@ -110,6 +110,22 @@ describe('user.service', () => {
     });
   });
 
+  describe('current user skills', () => {
+    it('returns offered and wanted skills for the authenticated user', () => {
+      const userDoc = createUserDoc({
+        offeredSkills: ['React', 'Node.js'],
+        wantedSkills: ['Docker'],
+      });
+
+      expect(userService.getCurrentUserOfferedSkills(userDoc)).toEqual({
+        offeredSkills: ['React', 'Node.js'],
+      });
+      expect(userService.getCurrentUserWantedSkills(userDoc)).toEqual({
+        wantedSkills: ['Docker'],
+      });
+    });
+  });
+
   describe('searchUsers', () => {
     it('searches with pagination and filters', async () => {
       const leanUsers = [

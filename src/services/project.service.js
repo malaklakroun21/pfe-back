@@ -23,6 +23,16 @@ const normalizeProjectId = (projectId) => {
   return normalizedProjectId;
 };
 
+const normalizeUserId = (userId) => {
+  const normalizedUserId = userId?.trim();
+
+  if (!normalizedUserId) {
+    throw new ApiError(400, 'User id is required', 'VALIDATION_ERROR');
+  }
+
+  return normalizedUserId;
+};
+
 const parsePositiveInteger = (value, fallback, fieldName, maxValue = Number.MAX_SAFE_INTEGER) => {
   if (value === undefined) {
     return fallback;
@@ -39,6 +49,12 @@ const parsePositiveInteger = (value, fallback, fieldName, maxValue = Number.MAX_
 
 const sanitizeProject = (project) => {
   return project?.toObject ? project.toObject() : { ...project };
+};
+
+const getProjectMemberIndex = (project, userId) => {
+  const members = project.members || [];
+
+  return members.findIndex((member) => member.userId === userId);
 };
 
 const getProjectDocumentById = async (projectId) => {
@@ -67,6 +83,7 @@ const createProject = async (currentUser, payload) => {
     description: payload.description || '',
     requiredSkill: payload.requiredSkill || '',
     status: payload.status || 'OPEN',
+    members: [],
   });
 
   return sanitizeProject(project);
@@ -170,10 +187,86 @@ const deleteProject = async (currentUser, projectId) => {
   return sanitizeProject(project);
 };
 
+const joinProject = async (currentUser, projectId) => {
+  const user = ensureAuthenticatedUser(currentUser);
+  const project = await getProjectDocumentById(projectId);
+
+  if (project.ownerId === user.userId) {
+    throw new ApiError(
+      400,
+      'Project owner is already part of this project',
+      'OWNER_ALREADY_IN_PROJECT'
+    );
+  }
+
+  if (getProjectMemberIndex(project, user.userId) !== -1) {
+    throw new ApiError(409, 'You have already joined this project', 'PROJECT_MEMBER_EXISTS');
+  }
+
+  project.members.push({
+    userId: user.userId,
+    joinedAt: new Date(),
+  });
+
+  await project.save();
+
+  return sanitizeProject(project);
+};
+
+const leaveProject = async (currentUser, projectId) => {
+  const user = ensureAuthenticatedUser(currentUser);
+  const project = await getProjectDocumentById(projectId);
+
+  if (project.ownerId === user.userId) {
+    throw new ApiError(
+      400,
+      'Project owner cannot leave an owned project',
+      'OWNER_CANNOT_LEAVE_PROJECT'
+    );
+  }
+
+  const memberIndex = getProjectMemberIndex(project, user.userId);
+
+  if (memberIndex === -1) {
+    throw new ApiError(404, 'You are not a member of this project', 'PROJECT_MEMBER_NOT_FOUND');
+  }
+
+  project.members.splice(memberIndex, 1);
+  await project.save();
+
+  return sanitizeProject(project);
+};
+
+const removeProjectMember = async (currentUser, projectId, memberUserId) => {
+  const user = ensureAuthenticatedUser(currentUser);
+  const normalizedMemberUserId = normalizeUserId(memberUserId);
+  const project = await getProjectDocumentById(projectId);
+
+  ensureProjectOwner(project, user.userId);
+
+  if (normalizedMemberUserId === project.ownerId) {
+    throw new ApiError(400, 'Project owner cannot be removed', 'OWNER_CANNOT_BE_REMOVED');
+  }
+
+  const memberIndex = getProjectMemberIndex(project, normalizedMemberUserId);
+
+  if (memberIndex === -1) {
+    throw new ApiError(404, 'Project member not found', 'PROJECT_MEMBER_NOT_FOUND');
+  }
+
+  project.members.splice(memberIndex, 1);
+  await project.save();
+
+  return sanitizeProject(project);
+};
+
 module.exports = {
   createProject,
   listProjects,
   getProjectById,
   updateProject,
   deleteProject,
+  joinProject,
+  leaveProject,
+  removeProjectMember,
 };

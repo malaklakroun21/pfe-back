@@ -10,6 +10,24 @@ const getMe = async (req, res, next) => {
   }
 };
 
+const getOfferedSkills = async (req, res, next) => {
+  try {
+    const skills = userService.getCurrentUserOfferedSkills(req.user);
+    res.status(200).json(new ApiResponse(200, skills, 'Offered skills fetched successfully'));
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getWantedSkills = async (req, res, next) => {
+  try {
+    const skills = userService.getCurrentUserWantedSkills(req.user);
+    res.status(200).json(new ApiResponse(200, skills, 'Wanted skills fetched successfully'));
+  } catch (error) {
+    next(error);
+  }
+};
+
 const updateMe = async (req, res, next) => {
   try {
     const user = await userService.updateUserProfile(req.user.userId, req.body);
@@ -75,6 +93,8 @@ const removeWantedSkill = async (req, res, next) => {
 
 module.exports = {
   getMe,
+  getOfferedSkills,
+  getWantedSkills,
   updateMe,
   getUserById,
   listUsers,

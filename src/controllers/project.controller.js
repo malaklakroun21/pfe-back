@@ -46,10 +46,44 @@ const deleteProject = async (req, res, next) => {
   }
 };
 
+const joinProject = async (req, res, next) => {
+  try {
+    const project = await projectService.joinProject(req.user, req.params.id);
+    res.status(200).json(new ApiResponse(200, project, 'Joined project successfully'));
+  } catch (error) {
+    next(error);
+  }
+};
+
+const leaveProject = async (req, res, next) => {
+  try {
+    const project = await projectService.leaveProject(req.user, req.params.id);
+    res.status(200).json(new ApiResponse(200, project, 'Left project successfully'));
+  } catch (error) {
+    next(error);
+  }
+};
+
+const removeProjectMember = async (req, res, next) => {
+  try {
+    const project = await projectService.removeProjectMember(
+      req.user,
+      req.params.id,
+      req.params.userId
+    );
+    res.status(200).json(new ApiResponse(200, project, 'Project member removed successfully'));
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createProject,
   listProjects,
   getProjectById,
   updateProject,
   deleteProject,
+  joinProject,
+  leaveProject,
+  removeProjectMember,
 };

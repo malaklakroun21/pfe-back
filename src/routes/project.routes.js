@@ -14,6 +14,10 @@ router
   .post(validate(createProjectSchema), projectController.createProject)
   .get(projectController.listProjects);
 
+router.post('/:id/join', projectController.joinProject);
+router.post('/:id/leave', projectController.leaveProject);
+router.delete('/:id/members/:userId', projectController.removeProjectMember);
+
 router
   .route('/:id')
   .get(projectController.getProjectById)

@@ -95,6 +95,24 @@ const getCurrentUser = (user) => {
   return sanitizeUser(ensureAuthenticatedUser(user));
 };
 
+const getCurrentUserSkillList = (user, fieldName) => {
+  const currentUser = ensureAuthenticatedUser(user);
+
+  return [...(currentUser[fieldName] || [])];
+};
+
+const getCurrentUserOfferedSkills = (user) => {
+  return {
+    offeredSkills: getCurrentUserSkillList(user, 'offeredSkills'),
+  };
+};
+
+const getCurrentUserWantedSkills = (user) => {
+  return {
+    wantedSkills: getCurrentUserSkillList(user, 'wantedSkills'),
+  };
+};
+
 const applyProfileUpdates = (currentUser, payload = {}) => {
   if (payload.name !== undefined) {
     const { firstName, lastName } = splitDisplayName(payload.name);
@@ -344,6 +362,8 @@ module.exports = {
   sanitizeUser,
   sanitizePublicUser,
   getCurrentUser,
+  getCurrentUserOfferedSkills,
+  getCurrentUserWantedSkills,
   updateCurrentUser,
   getUserPublicProfile,
   getUserById,
