@@ -5,6 +5,7 @@ const updateMeSchema = Joi.object({
   firstName: Joi.string().trim().max(50).optional(),
   lastName: Joi.string().trim().max(50).optional(),
   bio: Joi.string().allow('').max(500).optional(),
+  avatar: Joi.string().trim().uri().optional(),
   photo: Joi.string().trim().uri().optional(),
   profilePicture: Joi.string().trim().uri().optional(),
 })
@@ -13,6 +14,18 @@ const updateMeSchema = Joi.object({
     'object.min': 'At least one field is required',
   });
 
+const skillValueSchema = Joi.string().trim().min(1).max(100);
+
+const manageUserSkillSchema = Joi.object({
+  skill: skillValueSchema.optional(),
+  skillName: skillValueSchema.optional(),
+})
+  .or('skill', 'skillName')
+  .messages({
+    'object.missing': 'Skill name is required',
+  });
+
 module.exports = {
   updateMeSchema,
+  manageUserSkillSchema,
 };

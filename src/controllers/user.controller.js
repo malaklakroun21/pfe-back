@@ -12,7 +12,7 @@ const getMe = async (req, res, next) => {
 
 const updateMe = async (req, res, next) => {
   try {
-    const user = await userService.updateCurrentUser(req.user, req.body);
+    const user = await userService.updateUserProfile(req.user.userId, req.body);
     res.status(200).json(new ApiResponse(200, user, 'Profile updated successfully'));
   } catch (error) {
     next(error);
@@ -21,7 +21,7 @@ const updateMe = async (req, res, next) => {
 
 const getUserById = async (req, res, next) => {
   try {
-    const user = await userService.getUserPublicProfile(req.params.id);
+    const user = await userService.getUserById(req.params.id);
     res.status(200).json(new ApiResponse(200, user, 'Public profile fetched successfully'));
   } catch (error) {
     next(error);
@@ -30,8 +30,44 @@ const getUserById = async (req, res, next) => {
 
 const listUsers = async (req, res, next) => {
   try {
-    const result = await userService.listUsers(req.query);
+    const result = await userService.searchUsers(req.query);
     res.status(200).json(new ApiResponse(200, result, 'Users fetched successfully'));
+  } catch (error) {
+    next(error);
+  }
+};
+
+const addOfferedSkill = async (req, res, next) => {
+  try {
+    const user = await userService.addSkillOffered(req.user.userId, req.body);
+    res.status(200).json(new ApiResponse(200, user, 'Offered skill added successfully'));
+  } catch (error) {
+    next(error);
+  }
+};
+
+const removeOfferedSkill = async (req, res, next) => {
+  try {
+    const user = await userService.removeSkillOffered(req.user.userId, req.body);
+    res.status(200).json(new ApiResponse(200, user, 'Offered skill removed successfully'));
+  } catch (error) {
+    next(error);
+  }
+};
+
+const addWantedSkill = async (req, res, next) => {
+  try {
+    const user = await userService.addSkillWanted(req.user.userId, req.body);
+    res.status(200).json(new ApiResponse(200, user, 'Wanted skill added successfully'));
+  } catch (error) {
+    next(error);
+  }
+};
+
+const removeWantedSkill = async (req, res, next) => {
+  try {
+    const user = await userService.removeSkillWanted(req.user.userId, req.body);
+    res.status(200).json(new ApiResponse(200, user, 'Wanted skill removed successfully'));
   } catch (error) {
     next(error);
   }
@@ -42,4 +78,8 @@ module.exports = {
   updateMe,
   getUserById,
   listUsers,
+  addOfferedSkill,
+  removeOfferedSkill,
+  addWantedSkill,
+  removeWantedSkill,
 };

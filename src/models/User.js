@@ -47,6 +47,14 @@ const userSchema = new mongoose.Schema({
     type: [String],
     default: [],
   },
+  offeredSkills: {
+    type: [String],
+    default: [],
+  },
+  wantedSkills: {
+    type: [String],
+    default: [],
+  },
   role: {
     type: String,
     enum: ['LEARNER', 'MENTOR', 'ADMIN'],

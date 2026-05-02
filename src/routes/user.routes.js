@@ -4,13 +4,29 @@ const router = express.Router();
 const protect = require('../middleware/auth.middleware');
 const userController = require('../controllers/user.controller');
 const validate = require('../middleware/validate.middleware');
-const { updateMeSchema } = require('../validators/user.validator');
+const { updateMeSchema, manageUserSkillSchema } = require('../validators/user.validator');
 
 router.use(protect);
 
 router.get('/', userController.listUsers);
 router.get('/me', userController.getMe);
 router.put('/me', validate(updateMeSchema), userController.updateMe);
+router.post(
+  '/me/skills/offered',
+  validate(manageUserSkillSchema),
+  userController.addOfferedSkill
+);
+router.delete(
+  '/me/skills/offered',
+  validate(manageUserSkillSchema),
+  userController.removeOfferedSkill
+);
+router.post('/me/skills/wanted', validate(manageUserSkillSchema), userController.addWantedSkill);
+router.delete(
+  '/me/skills/wanted',
+  validate(manageUserSkillSchema),
+  userController.removeWantedSkill
+);
 router.get('/:id', userController.getUserById);
 
 module.exports = router;

@@ -4,10 +4,12 @@ const router = express.Router();
 // Import route modules
 const authRoutes = require('./auth.routes');
 const messageRoutes = require('./message.routes');
+const projectRoutes = require('./project.routes');
 const userRoutes = require('./user.routes');
 
 router.use('/auth', authRoutes);
 router.use('/messages', messageRoutes);
+router.use('/projects', projectRoutes);
 router.use('/users', userRoutes);
 
 router.get('/', (req, res) => {
