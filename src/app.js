@@ -6,7 +6,7 @@ const morgan = require('morgan');
 const routes = require('./routes');
 const errorHandler = require('./middleware/error.middleware');
 const notFound = require('./middleware/notFound.middleware');
-const sanitizeRequest = require('./middleware/sanitize.middleware');
+const mongoSanitize = require('./middleware/sanitize.middleware');
 
 const app = express();
 
@@ -15,7 +15,7 @@ app.use(helmet());
 app.use(cors({ origin: process.env.CLIENT_URL, credentials: true }));
 app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: true }));
-app.use(sanitizeRequest);
+app.use(mongoSanitize());
 
 // Logging in development
 if (process.env.NODE_ENV === 'development') {

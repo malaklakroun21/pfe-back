@@ -3,9 +3,12 @@ const ApiError = require('../utils/ApiError');
 const { sanitizeUser } = require('./user.service');
 
 const buildAuthPayload = (user) => {
+  const token = user.generateAuthToken();
+
   return {
     user: sanitizeUser(user),
-    accessToken: user.generateAuthToken(),
+    token,
+    accessToken: token,
   };
 };
 
@@ -74,9 +77,25 @@ const loginUser = async (email, password) => {
   return buildAuthPayload(user);
 };
 
+const getCurrentUser = (user) => {
+  if (!user) {
+    throw new ApiError(401, 'Authentication required', 'AUTH_REQUIRED');
+  }
+
+  return sanitizeUser(user);
+};
+
+const logoutUser = () => {
+  return { success: true };
+};
+
 module.exports = {
   registerUser,
   loginUser,
+  getCurrentUser,
+  logoutUser,
   register: registerUser,
   login: loginUser,
+  getMe: getCurrentUser,
+  logout: logoutUser,
 };

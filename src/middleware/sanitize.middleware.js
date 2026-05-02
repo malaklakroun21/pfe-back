@@ -1,26 +1,30 @@
-const mongoSanitize = require('express-mongo-sanitize');
+const expressMongoSanitize = require('express-mongo-sanitize');
 
-const sanitizeRequest = (req, res, next) => {
-  if (req.body) {
-    req.body = mongoSanitize.sanitize(req.body);
-  }
+const sanitize = (target, options) => expressMongoSanitize.sanitize(target, options);
 
-  if (req.params) {
-    req.params = mongoSanitize.sanitize(req.params);
-  }
+const mongoSanitize = (options = {}) => {
+  return (req, res, next) => {
+    if (req.body) {
+      req.body = sanitize(req.body, options);
+    }
 
-  if (req.headers) {
-    req.headers = mongoSanitize.sanitize(req.headers);
-  }
+    if (req.params) {
+      req.params = sanitize(req.params, options);
+    }
 
-  Object.defineProperty(req, 'query', {
-    value: mongoSanitize.sanitize(req.query || {}),
-    writable: true,
-    configurable: true,
-    enumerable: true,
-  });
+    if (req.headers) {
+      req.headers = sanitize(req.headers, options);
+    }
 
-  next();
+    Object.defineProperty(req, 'query', {
+      value: sanitize(req.query || {}, options),
+      writable: true,
+      configurable: true,
+      enumerable: true,
+    });
+
+    next();
+  };
 };
 
-module.exports = sanitizeRequest;
+module.exports = mongoSanitize;
