@@ -1,57 +1,68 @@
-const { randomUUID } = require('crypto');
-
 const User = require('../models/User');
 const ApiError = require('../utils/ApiError');
-const { hashPassword, comparePassword } = require('../utils/hash');
-const { signAccessToken } = require('../utils/jwt');
 const { sanitizeUser } = require('./user.service');
 
 const buildAuthPayload = (user) => {
   return {
     user: sanitizeUser(user),
-    accessToken: signAccessToken({
-      sub: user.userId,
-      role: user.role,
-    }),
+    accessToken: user.generateAuthToken(),
   };
 };
 
-const register = async (payload) => {
-  const existingUser = await User.findOne({ email: payload.email });
+const registerUser = async (userData) => {
+  const email = userData.email?.trim().toLowerCase();
+
+  if (!email) {
+    throw new ApiError(400, 'Email is required', 'VALIDATION_ERROR');
+  }
+
+  const existingUser = await User.findOne({ email });
 
   if (existingUser) {
     throw new ApiError(409, 'Email already in use', 'EMAIL_ALREADY_EXISTS');
   }
 
-  const user = await User.create({
-    userId: `USR-${randomUUID()}`,
-    email: payload.email,
-    passwordHash: await hashPassword(payload.password),
-    firstName: payload.firstName,
-    lastName: payload.lastName,
-    profilePicture: payload.profilePicture,
-    bio: payload.bio,
-    countryId: payload.countryId,
-    cityId: payload.cityId,
-    languages: payload.languages || [],
-    role: payload.role || 'LEARNER',
-  });
+  const requestedRole = userData.role?.toLowerCase?.().trim();
+  const role = ['user', 'mentor'].includes(requestedRole) ? requestedRole : 'user';
 
-  return buildAuthPayload(user);
+  try {
+    const user = await User.create({
+      name: userData.name?.trim(),
+      email,
+      password: userData.password,
+      role,
+      bio: userData.bio,
+      avatar: userData.avatar,
+    });
+
+    return buildAuthPayload(user);
+  } catch (error) {
+    if (error?.code === 11000) {
+      throw new ApiError(409, 'Email already in use', 'EMAIL_ALREADY_EXISTS');
+    }
+
+    throw error;
+  }
 };
 
-const login = async ({ email, password }) => {
-  const user = await User.findOne({ email });
+const loginUser = async (email, password) => {
+  const normalizedEmail = email?.trim().toLowerCase();
+
+  if (!normalizedEmail) {
+    throw new ApiError(400, 'Email is required', 'VALIDATION_ERROR');
+  }
+
+  const user = await User.findOne({ email: normalizedEmail }).select('+password');
 
   if (!user) {
     throw new ApiError(401, 'Invalid credentials', 'INVALID_CREDENTIALS');
   }
 
-  if (user.accountStatus !== 'ACTIVE') {
-    throw new ApiError(403, 'Account is not active', 'ACCOUNT_NOT_ACTIVE');
+  if (!user.isActive) {
+    throw new ApiError(401, 'Account is not active', 'ACCOUNT_NOT_ACTIVE');
   }
 
-  const isPasswordValid = await comparePassword(password, user.passwordHash);
+  const isPasswordValid = await user.comparePassword(password);
 
   if (!isPasswordValid) {
     throw new ApiError(401, 'Invalid credentials', 'INVALID_CREDENTIALS');
@@ -64,6 +75,8 @@ const login = async ({ email, password }) => {
 };
 
 module.exports = {
-  register,
-  login,
+  registerUser,
+  loginUser,
+  register: registerUser,
+  login: loginUser,
 };

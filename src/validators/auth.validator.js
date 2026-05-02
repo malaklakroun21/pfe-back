@@ -1,16 +1,17 @@
 const Joi = require('joi');
 
 const registerSchema = Joi.object({
+  name: Joi.string().trim().min(2).max(50).required(),
   email: Joi.string().email().trim().lowercase().required(),
-  password: Joi.string().min(8).max(128).required(),
-  firstName: Joi.string().trim().max(50).optional(),
-  lastName: Joi.string().trim().max(50).optional(),
-  profilePicture: Joi.string().trim().uri().optional(),
+  password: Joi.string()
+    .min(8)
+    .max(128)
+    .pattern(/^(?=.*[A-Z])(?=.*\d)/)
+    .message('Password must contain at least one uppercase letter and one number')
+    .required(),
+  role: Joi.string().valid('user', 'mentor').default('user'),
   bio: Joi.string().max(500).optional(),
-  countryId: Joi.string().trim().optional(),
-  cityId: Joi.string().trim().optional(),
-  languages: Joi.array().items(Joi.string().trim()).default([]),
-  role: Joi.string().valid('LEARNER', 'MENTOR').default('LEARNER'),
+  avatar: Joi.string().trim().uri().optional(),
 });
 
 const loginSchema = Joi.object({

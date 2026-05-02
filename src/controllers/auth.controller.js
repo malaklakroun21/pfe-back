@@ -3,7 +3,7 @@ const ApiResponse = require('../utils/ApiResponse');
 
 const register = async (req, res, next) => {
   try {
-    const result = await authService.register(req.body);
+    const result = await authService.registerUser(req.body);
     res.status(201).json(new ApiResponse(201, result, 'User registered successfully'));
   } catch (error) {
     next(error);
@@ -12,7 +12,7 @@ const register = async (req, res, next) => {
 
 const login = async (req, res, next) => {
   try {
-    const result = await authService.login(req.body);
+    const result = await authService.loginUser(req.body.email, req.body.password);
     res.status(200).json(new ApiResponse(200, result, 'Login successful'));
   } catch (error) {
     next(error);

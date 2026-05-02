@@ -1,3 +1,5 @@
+const mongoose = require('mongoose');
+
 const User = require('../models/User');
 const ApiError = require('../utils/ApiError');
 const { verifyAccessToken } = require('../utils/jwt');
@@ -22,14 +24,18 @@ const protect = async (req, res, next) => {
       throw new ApiError(401, 'Invalid access token', 'INVALID_TOKEN');
     }
 
-    const user = await User.findOne({ userId: payload.sub });
+    if (!mongoose.Types.ObjectId.isValid(payload.sub)) {
+      throw new ApiError(401, 'Invalid access token', 'INVALID_TOKEN');
+    }
+
+    const user = await User.findById(payload.sub);
 
     if (!user) {
       throw new ApiError(401, 'User for this token no longer exists', 'AUTH_USER_NOT_FOUND');
     }
 
-    if (user.accountStatus !== 'ACTIVE') {
-      throw new ApiError(403, 'Account is not active', 'ACCOUNT_NOT_ACTIVE');
+    if (!user.isActive) {
+      throw new ApiError(401, 'Account is not active', 'ACCOUNT_NOT_ACTIVE');
     }
 
     req.user = user;

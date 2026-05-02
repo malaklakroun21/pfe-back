@@ -1,10 +1,20 @@
 const { randomUUID } = require('crypto');
 
+const mongoose = require('mongoose');
+
 const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
 const User = require('../models/User');
 const ApiError = require('../utils/ApiError');
 const { sanitizeUser } = require('./user.service');
+
+const getPublicUserId = (user) => {
+  if (!user?._id) {
+    return user?.userId ? String(user.userId) : undefined;
+  }
+
+  return user._id.toString();
+};
 
 const buildConversationParticipants = (userIdA, userIdB) => {
   return [userIdA, userIdB].sort();
@@ -20,17 +30,19 @@ const buildConversationFilter = (userIdA, userIdB) => {
 };
 
 const getActiveUserByUserId = async (userId) => {
-  if (!userId || !userId.trim()) {
+  const trimmed = userId?.trim();
+
+  if (!trimmed || !mongoose.Types.ObjectId.isValid(trimmed)) {
     throw new ApiError(400, 'User id is required', 'VALIDATION_ERROR');
   }
 
-  const user = await User.findOne({ userId });
+  const user = await User.findById(trimmed);
 
   if (!user) {
     throw new ApiError(404, 'User not found', 'USER_NOT_FOUND');
   }
 
-  if (user.accountStatus !== 'ACTIVE') {
+  if (!user.isActive) {
     throw new ApiError(403, 'User account is not active', 'USER_NOT_ACTIVE');
   }
 
@@ -40,15 +52,16 @@ const getActiveUserByUserId = async (userId) => {
 const buildParticipantMap = (users) => {
   return new Map(
     users.map((user) => {
+      const id = getPublicUserId(user);
+
       return [
-        user.userId,
+        id,
         {
-          userId: user.userId,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          profilePicture: user.profilePicture,
+          userId: id,
+          name: user.name,
+          avatar: user.avatar,
           role: user.role,
-          accountStatus: user.accountStatus,
+          accountStatus: user.isActive ? 'ACTIVE' : 'INACTIVE',
         },
       ];
     })
@@ -98,7 +111,7 @@ const getOrCreateConversation = async (userIdA, userIdB, lastMessageAt = new Dat
 };
 
 const sendMessage = async (currentUser, { recipientUserId, content }) => {
-  const senderId = currentUser?.userId;
+  const senderId = getPublicUserId(currentUser);
 
   if (!senderId) {
     throw new ApiError(401, 'Authentication required', 'AUTH_REQUIRED');
@@ -128,7 +141,7 @@ const sendMessage = async (currentUser, { recipientUserId, content }) => {
 };
 
 const listConversations = async (currentUser) => {
-  const currentUserId = currentUser?.userId;
+  const currentUserId = getPublicUserId(currentUser);
 
   if (!currentUserId) {
     throw new ApiError(401, 'Authentication required', 'AUTH_REQUIRED');
@@ -145,16 +158,22 @@ const listConversations = async (currentUser) => {
     return [];
   }
 
-  const otherParticipantIds = [...new Set(
-    conversations.map((conversation) => {
-      return conversation.participant1Id === currentUserId
-        ? conversation.participant2Id
-        : conversation.participant1Id;
-    })
-  )];
+  const otherParticipantIds = [
+    ...new Set(
+      conversations.map((conversation) => {
+        return conversation.participant1Id === currentUserId
+          ? conversation.participant2Id
+          : conversation.participant1Id;
+      })
+    ),
+  ];
+
+  const objectIds = otherParticipantIds
+    .filter((id) => mongoose.Types.ObjectId.isValid(id))
+    .map((id) => new mongoose.Types.ObjectId(id));
 
   const [participants, lastMessages, unreadCounts] = await Promise.all([
-    User.find({ userId: { $in: otherParticipantIds } }).lean(),
+    objectIds.length ? User.find({ _id: { $in: objectIds } }).lean() : Promise.resolve([]),
     Message.aggregate([
       {
         $match: {
@@ -192,9 +211,7 @@ const listConversations = async (currentUser) => {
 
   const participantMap = buildParticipantMap(participants.map((user) => sanitizeUser(user)));
   const lastMessageMap = new Map();
-  const unreadCountMap = new Map(
-    unreadCounts.map((item) => [item._id, item.unreadCount])
-  );
+  const unreadCountMap = new Map(unreadCounts.map((item) => [item._id, item.unreadCount]));
 
   for (const message of lastMessages) {
     lastMessageMap.set(message._id, serializeMessage(message.message));
@@ -216,8 +233,20 @@ const listConversations = async (currentUser) => {
   });
 };
 
+const serializeParticipant = (user) => {
+  const id = getPublicUserId(user);
+
+  return {
+    userId: id,
+    name: user.name,
+    avatar: user.avatar,
+    role: user.role,
+    accountStatus: user.isActive ? 'ACTIVE' : 'INACTIVE',
+  };
+};
+
 const getConversationWithUser = async (currentUser, otherUserId) => {
-  const currentUserId = currentUser?.userId;
+  const currentUserId = getPublicUserId(currentUser);
 
   if (!currentUserId) {
     throw new ApiError(401, 'Authentication required', 'AUTH_REQUIRED');
@@ -237,14 +266,7 @@ const getConversationWithUser = async (currentUser, otherUserId) => {
   if (!conversation) {
     return {
       conversationId: null,
-      participant: {
-        userId: otherUser.userId,
-        firstName: otherUser.firstName,
-        lastName: otherUser.lastName,
-        profilePicture: otherUser.profilePicture,
-        role: otherUser.role,
-        accountStatus: otherUser.accountStatus,
-      },
+      participant: serializeParticipant(otherUser),
       messages: [],
     };
   }
@@ -255,20 +277,13 @@ const getConversationWithUser = async (currentUser, otherUserId) => {
 
   return {
     conversationId: conversation.conversationId,
-    participant: {
-      userId: otherUser.userId,
-      firstName: otherUser.firstName,
-      lastName: otherUser.lastName,
-      profilePicture: otherUser.profilePicture,
-      role: otherUser.role,
-      accountStatus: otherUser.accountStatus,
-    },
+    participant: serializeParticipant(otherUser),
     messages: messages.map(serializeMessage),
   };
 };
 
 const markMessageAsRead = async (currentUser, messageId) => {
-  const currentUserId = currentUser?.userId;
+  const currentUserId = getPublicUserId(currentUser);
 
   if (!currentUserId) {
     throw new ApiError(401, 'Authentication required', 'AUTH_REQUIRED');

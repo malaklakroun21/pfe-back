@@ -1,36 +1,27 @@
+const mongoose = require('mongoose');
+
 const User = require('../models/User');
 const ApiError = require('../utils/ApiError');
 
-const USER_ROLES = ['LEARNER', 'MENTOR', 'ADMIN'];
-
-const splitDisplayName = (name) => {
-  const normalizedName = name.trim().replace(/\s+/g, ' ');
-  const [firstName, ...rest] = normalizedName.split(' ');
-
-  return {
-    firstName,
-    lastName: rest.join(' '),
-  };
-};
+const USER_ROLES = ['user', 'mentor', 'admin'];
 
 const sanitizeUser = (user) => {
-  const plainUser = user.toObject ? user.toObject() : { ...user };
+  const plainUser = user.toObject ? user.toObject({ virtuals: true }) : { ...user };
+  delete plainUser.password;
   delete plainUser.passwordHash;
   return plainUser;
 };
 
 const sanitizePublicUser = (user) => {
   const plainUser = sanitizeUser(user);
+  const id = plainUser._id?.toString?.() ?? String(plainUser._id);
 
   return {
-    userId: plainUser.userId,
-    firstName: plainUser.firstName,
-    lastName: plainUser.lastName,
-    profilePicture: plainUser.profilePicture,
+    id,
+    userId: id,
+    name: plainUser.name,
+    avatar: plainUser.avatar,
     bio: plainUser.bio,
-    countryId: plainUser.countryId,
-    cityId: plainUser.cityId,
-    languages: plainUser.languages || [],
     role: plainUser.role,
     createdAt: plainUser.createdAt,
   };
@@ -66,17 +57,7 @@ const updateCurrentUser = async (user, payload) => {
   const currentUser = ensureAuthenticatedUser(user);
 
   if (payload.name !== undefined) {
-    const { firstName, lastName } = splitDisplayName(payload.name);
-    currentUser.firstName = firstName;
-    currentUser.lastName = lastName;
-  }
-
-  if (payload.firstName !== undefined) {
-    currentUser.firstName = payload.firstName;
-  }
-
-  if (payload.lastName !== undefined) {
-    currentUser.lastName = payload.lastName;
+    currentUser.name = payload.name.trim().replace(/\s+/g, ' ');
   }
 
   if (payload.bio !== undefined) {
@@ -84,11 +65,11 @@ const updateCurrentUser = async (user, payload) => {
   }
 
   if (payload.photo !== undefined) {
-    currentUser.profilePicture = payload.photo;
+    currentUser.avatar = payload.photo;
   }
 
   if (payload.profilePicture !== undefined) {
-    currentUser.profilePicture = payload.profilePicture;
+    currentUser.avatar = payload.profilePicture;
   }
 
   await currentUser.save();
@@ -99,13 +80,13 @@ const updateCurrentUser = async (user, payload) => {
 const getUserPublicProfile = async (userId) => {
   const normalizedUserId = userId?.trim();
 
-  if (!normalizedUserId) {
+  if (!normalizedUserId || !mongoose.Types.ObjectId.isValid(normalizedUserId)) {
     throw new ApiError(400, 'User id is required', 'VALIDATION_ERROR');
   }
 
   const user = await User.findOne({
-    userId: normalizedUserId,
-    accountStatus: 'ACTIVE',
+    _id: new mongoose.Types.ObjectId(normalizedUserId),
+    isActive: true,
   });
 
   if (!user) {
@@ -117,12 +98,12 @@ const getUserPublicProfile = async (userId) => {
 
 const listUsers = async (query = {}) => {
   const q = query.q?.trim();
-  const role = query.role?.trim().toUpperCase();
+  const role = query.role?.trim().toLowerCase();
   const page = parsePositiveInteger(query.page, 1, 'page');
   const limit = parsePositiveInteger(query.limit, 20, 'limit', 100);
 
   const filter = {
-    accountStatus: 'ACTIVE',
+    isActive: true,
   };
 
   if (role) {
@@ -137,12 +118,7 @@ const listUsers = async (query = {}) => {
     const escapedQuery = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const searchRegex = new RegExp(escapedQuery, 'i');
 
-    filter.$or = [
-      { firstName: searchRegex },
-      { lastName: searchRegex },
-      { email: searchRegex },
-      { userId: searchRegex },
-    ];
+    filter.$or = [{ name: searchRegex }, { email: searchRegex }];
   }
 
   const skip = (page - 1) * limit;
