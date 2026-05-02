@@ -9,7 +9,11 @@ if (process.env.NODE_ENV === 'development') {
 
 res.status(statusCode).json({
     success: false,
-    error: { code, message },
+    error: {
+        code,
+        message,
+        ...(err.details && { details: err.details }),
+    },
     ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
 });
 };

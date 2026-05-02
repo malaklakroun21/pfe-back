@@ -1,21 +1,40 @@
 const ApiError = require('../utils/ApiError');
 
-const validate = (schema) => (req, res, next) => {
+const normalizeDetail = (detail) => ({
+  field: detail.path.join('.'),
+  message: detail.message,
+  type: detail.type,
+});
+
+const assignRequestProperty = (req, property, value) => {
+  try {
+    req[property] = value;
+  } catch (error) {
+    Object.defineProperty(req, property, {
+      value,
+      writable: true,
+      configurable: true,
+      enumerable: true,
+    });
+  }
+};
+
+const validate = (schema, property = 'body') => (req, res, next) => {
   if (!schema) {
     return next();
   }
 
-  const { error, value } = schema.validate(req.body, {
+  const { error, value } = schema.validate(req[property], {
     abortEarly: false,
     stripUnknown: true,
   });
 
   if (error) {
-    const message = error.details.map((detail) => detail.message).join(', ');
-    return next(new ApiError(400, message, 'VALIDATION_ERROR'));
+    const details = error.details.map(normalizeDetail);
+    return next(new ApiError(400, 'Validation failed', 'VALIDATION_ERROR', details));
   }
 
-  req.body = value;
+  assignRequestProperty(req, property, value);
   next();
 };
 
