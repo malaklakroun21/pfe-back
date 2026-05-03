@@ -35,9 +35,9 @@ const sessionSchema = new mongoose.Schema(
     },
     sessionStatus: {
       type: String,
-      enum: ['SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'DISPUTED'],
+      enum: ['PENDING', 'SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'DISPUTED'],
       uppercase: true,
-      default: 'SCHEDULED',
+      default: 'PENDING',
     },
     startTime: {
       type: Date,

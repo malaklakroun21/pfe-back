@@ -5,6 +5,12 @@ const validate = (schema) => (req, res, next) => {
     return next();
   }
 
+  if (req.body === undefined) {
+    return next(
+      new ApiError(400, 'Request body must be valid JSON', 'VALIDATION_ERROR')
+    );
+  }
+
   const { error, value } = schema.validate(req.body, {
     abortEarly: false,
     stripUnknown: true,
