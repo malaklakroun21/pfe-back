@@ -1,10 +1,13 @@
 const { randomUUID } = require('crypto');
+const mongoose = require('mongoose');
 
 const User = require('../models/User');
 const ApiError = require('../utils/ApiError');
 const { hashPassword, comparePassword } = require('../utils/hash');
 const { signAccessToken } = require('../utils/jwt');
 const { sanitizeUser } = require('./user.service');
+
+const INITIAL_TIME_CREDITS = '10';
 
 const buildAuthPayload = (user) => {
   return {
@@ -35,6 +38,7 @@ const register = async (payload) => {
     cityId: payload.cityId,
     languages: payload.languages || [],
     role: payload.role || 'LEARNER',
+    timeCredits: mongoose.Types.Decimal128.fromString(INITIAL_TIME_CREDITS),
   });
 
   return buildAuthPayload(user);
