@@ -4,6 +4,7 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 
 const routes = require('./routes');
+const adminRoutes = require('./routes/admin');
 const errorHandler = require('./middleware/error.middleware');
 const notFound = require('./middleware/notFound.middleware');
 const sanitizeRequest = require('./middleware/sanitize.middleware');
@@ -29,6 +30,7 @@ app.get('/health', (req, res) => {
 
 // API routes
 app.use('/api/v1', routes);
+app.use('/api/admin', adminRoutes);
 
 // Error handling (must be last)
 app.use(notFound);

@@ -1,0 +1,133 @@
+{
+  "info": {
+    "name": "Socket Chat (Socket.IO) Flow",
+    "_postman_id": "2a5f6f2b-27f6-4e5b-9db7-1c8f9e47c9e8",
+    "description": "End-to-end setup for Socket.IO chat testing.\n\nHow to use in Postman:\n- Import this collection and the environment `Socket Chat Local`.\n- Run the two HTTP requests to register users and capture tokens.\n- Create a **Socket.IO** request in Postman (New → Socket.IO) and connect to `{{socketUrl}}`.\n- In the Socket.IO request's **Auth** (handshake auth) set: `{ \"token\": \"Bearer {{userAToken}}\" }`.\n  - This matches the server's socket auth logic: it reads `socket.handshake.auth.token` or `authorization` header.\n- Add listeners:\n  - `chat:message` (incoming message)\n  - `chat:read:update` (read receipts)\n- Send events:\n  - `chat:send` with `{ \"recipientUserId\": \"{{userBId}}\", \"content\": \"hello\" }`\n  - `chat:read` with `{ \"messageId\": \"<paste messageId here>\" }`\n\nNotes:\n- This backend uses Socket.IO over WebSockets. Postman doesn't support long-polling fallback.\n- The server joins each authenticated user to a room `user:<userId>` and emits `chat:message` to both sender + recipient.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1) Register User A (Mentor)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"socket-user-a@test.com\",\n  \"password\": \"Password123\",\n  \"firstName\": \"Socket\",\n  \"lastName\": \"UserA\",\n  \"role\": \"MENTOR\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/auth/register",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "auth",
+            "register"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Register user A success', function () {",
+              "  pm.response.to.have.status(201);",
+              "});",
+              "const json = pm.response.json();",
+              "pm.environment.set('userAToken', json.data.accessToken);",
+              "pm.environment.set('userAId', json.data.user.userId);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2) Register User B (Learner)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"socket-user-b@test.com\",\n  \"password\": \"Password123\",\n  \"firstName\": \"Socket\",\n  \"lastName\": \"UserB\",\n  \"role\": \"LEARNER\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/auth/register",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "auth",
+            "register"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Register user B success', function () {",
+              "  pm.response.to.have.status(201);",
+              "});",
+              "const json = pm.response.json();",
+              "pm.environment.set('userBToken', json.data.accessToken);",
+              "pm.environment.set('userBId', json.data.user.userId);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3) Get Conversation (HTTP fallback)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{userAToken}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/messages/with/{{userBId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "messages",
+            "with",
+            "{{userBId}}"
+          ]
+        }
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000"
+    },
+    {
+      "key": "socketUrl",
+      "value": "ws://localhost:5000"
+    }
+  ]
+}
