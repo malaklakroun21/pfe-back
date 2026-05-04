@@ -3,13 +3,20 @@ const router = express.Router();
 
 // Import route modules
 const authRoutes = require('./auth.routes');
+const creditRoutes = require('./credit.routes');
 const messageRoutes = require('./message.routes');
 const projectRoutes = require('./project.routes');
+const ratingRoutes = require('./rating.routes');
+const sessionRoutes = require('./session.routes');
 const userRoutes = require('./user.routes');
 
 router.use('/auth', authRoutes);
+router.use('/credits', creditRoutes);
 router.use('/messages', messageRoutes);
 router.use('/projects', projectRoutes);
+// New feature modules.
+router.use('/ratings', ratingRoutes);
+router.use('/sessions', sessionRoutes);
 router.use('/users', userRoutes);
 
 router.get('/', (req, res) => {

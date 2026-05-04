@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 
 const sessionSchema = new mongoose.Schema(
   {
+    // Public identifier used by API paths.
     sessionId: {
       type: String,
       required: true,
@@ -9,51 +10,51 @@ const sessionSchema = new mongoose.Schema(
       index: true,
       trim: true,
     },
-    requestId: {
-      type: String,
-      required: true,
-      trim: true,
-      ref: 'SessionRequest',
-    },
+    // Learner and teacher are linked by userId (string), not ObjectId.
     learnerId: {
       type: String,
       required: true,
       trim: true,
-      ref: 'Learner',
+      ref: 'User',
+      index: true,
     },
     teacherId: {
       type: String,
       required: true,
       trim: true,
-      ref: 'Learner',
+      ref: 'User',
+      index: true,
     },
-    skillId: {
+    // Domain fields requested for session request lifecycle.
+    skill: {
       type: String,
       required: true,
       trim: true,
-      ref: 'Skill',
     },
-    sessionStatus: {
+    duration: {
+      type: Number,
+      required: true,
+      min: 1,
+    },
+    date: {
+      type: Date,
+      required: true,
+    },
+    message: {
       type: String,
-      enum: ['SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'DISPUTED'],
+      default: '',
+    },
+    status: {
+      type: String,
+      enum: ['PENDING', 'ACCEPTED', 'REJECTED', 'COMPLETED'],
       uppercase: true,
-      default: 'SCHEDULED',
+      default: 'PENDING',
+      index: true,
     },
-    startTime: {
-      type: Date,
-    },
-    endTime: {
-      type: Date,
-    },
-    actualDuration: {
-      type: Number,
-      default: 0,
-      min: 0,
-    },
-    creditsExchanged: {
-      type: Number,
-      default: 0,
-      min: 0,
+    // Marks whether credit transfer already ran for idempotency protection.
+    creditsTransferred: {
+      type: Boolean,
+      default: false,
     },
     completedAt: {
       type: Date,

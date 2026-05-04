@@ -2,52 +2,40 @@ const mongoose = require('mongoose');
 
 const creditTransactionSchema = new mongoose.Schema(
   {
-    transactionId: {
+    // Sender (learner) and receiver (teacher) of session credits.
+    fromUser: {
       type: String,
       required: true,
-      unique: true,
+      trim: true,
       index: true,
-      trim: true,
-    },
-    userId: {
-      type: String,
-      required: true,
-      trim: true,
       ref: 'User',
     },
-    relatedSessionId: {
+    toUser: {
       type: String,
+      required: true,
+      trim: true,
+      index: true,
+      ref: 'User',
+    },
+    // Credits moved in this transfer event.
+    amount: {
+      type: Number,
+      required: true,
+      min: 0.01,
+    },
+    // Session this transfer belongs to.
+    sessionId: {
+      type: String,
+      required: true,
       trim: true,
       ref: 'Session',
     },
-    transactionType: {
+    type: {
       type: String,
-      enum: ['EARN', 'SPEND', 'ADJUSTMENT', 'INITIAL_ALLOCATION'],
+      enum: ['TRANSFER'],
       uppercase: true,
       required: true,
-    },
-    amount: {
-      type: Number,
-      default: 0,
-      min: 0,
-    },
-    description: {
-      type: String,
-      default: '',
-    },
-    balanceBefore: {
-      type: Number,
-      default: 0,
-      min: 0,
-    },
-    balanceAfter: {
-      type: Number,
-      default: 0,
-      min: 0,
-    },
-    initiatedBy: {
-      type: String,
-      trim: true,
+      default: 'TRANSFER',
     },
     createdAt: {
       type: Date,
@@ -58,6 +46,9 @@ const creditTransactionSchema = new mongoose.Schema(
     versionKey: false,
   }
 );
+
+// Prevent duplicate transfers for the same session completion.
+creditTransactionSchema.index({ sessionId: 1, type: 1 }, { unique: true });
 
 module.exports =
   mongoose.models.CreditTransaction ||

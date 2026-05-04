@@ -29,6 +29,8 @@ router.delete(
   validate(manageUserSkillSchema),
   userController.removeWantedSkill
 );
+// Public rating summary for a user profile.
+router.get('/:id/ratings', userController.getUserRatings);
 router.get('/:id', userController.getUserById);
 
 module.exports = router;

@@ -1,4 +1,5 @@
 const userService = require('../services/user.service');
+const ratingService = require('../services/rating.service');
 const ApiResponse = require('../utils/ApiResponse');
 
 const getMe = async (req, res, next) => {
@@ -41,6 +42,16 @@ const getUserById = async (req, res, next) => {
   try {
     const user = await userService.getUserById(req.params.id);
     res.status(200).json(new ApiResponse(200, user, 'Public profile fetched successfully'));
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getUserRatings = async (req, res, next) => {
+  try {
+    // Returns profile-ready rating summary (avg + reviews).
+    const ratings = await ratingService.getRatingsForUser(req.params.id);
+    res.status(200).json(new ApiResponse(200, ratings, 'User ratings fetched successfully'));
   } catch (error) {
     next(error);
   }
@@ -97,6 +108,7 @@ module.exports = {
   getWantedSkills,
   updateMe,
   getUserById,
+  getUserRatings,
   listUsers,
   addOfferedSkill,
   removeOfferedSkill,
