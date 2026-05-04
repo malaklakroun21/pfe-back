@@ -4,7 +4,9 @@ const User = require('../models/User');
 const ApiError = require('../utils/ApiError');
 const { hashPassword, comparePassword } = require('../utils/hash');
 const { signAccessToken } = require('../utils/jwt');
+const { generateResetToken, hashToken } = require('../utils/token');
 const { sanitizeUser } = require('./user.service');
+const sendEmail = require('../utils/email');
 
 const buildAuthPayload = (user) => {
   return {
@@ -63,7 +65,66 @@ const login = async ({ email, password }) => {
   return buildAuthPayload(user);
 };
 
+const forgotPassword = async (email) => {
+  const user = await User.findOne({ email });
+
+  // Return a generic message regardless of whether the email exists.
+  // Revealing whether an email is registered is an enumeration vulnerability.
+  if (!user) {
+    return { message: 'If that email exists, a reset link has been sent.' };
+  }
+
+  const { plainToken, hashedToken, expires } = generateResetToken();
+
+  user.passwordResetToken = hashedToken;
+  user.passwordResetExpires = expires;
+  await user.save({ validateBeforeSave: false });
+
+  const resetUrl = `${process.env.CLIENT_URL}/reset-password?token=${plainToken}`;
+
+  try {
+    await sendEmail({
+      to: user.email,
+      subject: 'Password Reset Request',
+      text: `You requested a password reset. This link expires in 10 minutes:\n\n${resetUrl}\n\nIf you did not request this, ignore this email.`,
+    });
+  } catch (emailError) {
+    console.error('[EMAIL ERROR]', emailError.message);
+    // Roll back the token so the user can retry — a dangling token with no
+    // delivered email would lock them out until it expires.
+    user.passwordResetToken = undefined;
+    user.passwordResetExpires = undefined;
+    await user.save({ validateBeforeSave: false });
+    throw new ApiError(500, 'Failed to send reset email. Please try again.', 'EMAIL_SEND_FAILED');
+  }
+
+  return { message: 'If that email exists, a reset link has been sent.' };
+};
+
+const resetPassword = async (plainToken, newPassword) => {
+  const hashedToken = hashToken(plainToken);
+
+  const user = await User.findOne({
+    passwordResetToken: hashedToken,
+    passwordResetExpires: { $gt: Date.now() },
+  }).select('+passwordResetToken +passwordResetExpires');
+
+  if (!user) {
+    throw new ApiError(400, 'Invalid or expired token', 'INVALID_RESET_TOKEN');
+  }
+
+  // Hash manually — the model has no pre-save hook; this mirrors how register() works.
+  user.passwordHash = await hashPassword(newPassword);
+  user.passwordResetToken = undefined;
+  user.passwordResetExpires = undefined;
+  await user.save({ validateBeforeSave: false });
+
+  return buildAuthPayload(user);
+};
+
 module.exports = {
   register,
   login,
+  forgotPassword,
+  resetPassword,
 };
