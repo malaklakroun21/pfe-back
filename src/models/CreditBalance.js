@@ -38,6 +38,7 @@ const creditBalanceSchema = new mongoose.Schema(
     updatedBy: {
       type: String,
       trim: true,
+      ref: 'User',
     },
   },
   {

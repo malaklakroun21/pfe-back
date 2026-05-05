@@ -197,7 +197,7 @@ describe('admin routes RBAC, moderation, and audit flows', () => {
     };
     const getKey = {
       users: 'userId',
-      adminProfiles: 'adminId',
+      adminProfiles: 'userId',
       auditLogs: 'auditId',
       reports: 'reportId',
       settings: 'settingId',
@@ -290,7 +290,6 @@ describe('admin routes RBAC, moderation, and audit flows', () => {
 
     adminProfiles = [
       {
-        adminId: 'ADM-1',
         userId: 'USR-ADMIN',
         permissions: [
           'manage_users',
@@ -305,7 +304,6 @@ describe('admin routes RBAC, moderation, and audit flows', () => {
         lastActiveDate: new Date('2026-05-01T09:00:00.000Z'),
       },
       {
-        adminId: 'ADM-2',
         userId: 'USR-ADMIN-2',
         permissions: [
           'manage_users',
@@ -320,7 +318,6 @@ describe('admin routes RBAC, moderation, and audit flows', () => {
         lastActiveDate: new Date('2026-05-01T10:00:00.000Z'),
       },
       {
-        adminId: 'ADM-3',
         userId: 'USR-ADMIN-LIMITED',
         permissions: ['manage_users'],
         assignedDate: new Date('2026-04-10T09:00:00.000Z'),
@@ -331,7 +328,7 @@ describe('admin routes RBAC, moderation, and audit flows', () => {
     auditLogs = [
       {
         auditId: 'AUD-1',
-        adminId: 'ADM-1',
+        adminUserId: 'USR-ADMIN',
         userId: 'USR-USER-1',
         actionType: 'ADMIN_USER_UPDATED',
         targetEntityId: 'USR-USER-1',
@@ -364,7 +361,7 @@ describe('admin routes RBAC, moderation, and audit flows', () => {
         settingKey: 'default_session_credit_rate',
         settingValue: '6',
         description: 'Default session credit rate',
-        updatedBy: 'ADM-1',
+        updatedBy: 'USR-ADMIN',
         updatedAt: new Date('2026-05-01T13:00:00.000Z'),
       },
     ];
@@ -569,7 +566,7 @@ describe('admin routes RBAC, moderation, and audit flows', () => {
 
     expect(updateReportResponse.status).toBe(200);
     expect(updateReportResponse.body.data.reportStatus).toBe('UNDER_REVIEW');
-    expect(updateReportResponse.body.data.assignedTo).toBe('ADM-1');
+    expect(updateReportResponse.body.data.assignedTo).toBe('USR-ADMIN');
 
     const settingsResponse = await request(app)
       .get('/api/admin/settings')

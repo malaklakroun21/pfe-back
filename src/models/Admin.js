@@ -2,17 +2,11 @@ const mongoose = require('mongoose');
 
 const adminSchema = new mongoose.Schema(
   {
-    adminId: {
-      type: String,
-      required: true,
-      unique: true,
-      index: true,
-      trim: true,
-    },
     userId: {
       type: String,
       required: true,
       unique: true,
+      index: true,
       trim: true,
       ref: 'User',
     },

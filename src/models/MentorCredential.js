@@ -46,7 +46,7 @@ const mentorCredentialSchema = new mongoose.Schema(
     verifiedBy: {
       type: String,
       trim: true,
-      ref: 'Admin',
+      ref: 'User',
     },
   },
   {

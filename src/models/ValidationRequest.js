@@ -15,17 +15,17 @@ const validationRequestSchema = new mongoose.Schema(
       trim: true,
       ref: 'Skill',
     },
-    learnerId: {
+    learnerUserId: {
       type: String,
       required: true,
       trim: true,
-      ref: 'Learner',
+      ref: 'User',
     },
-    mentorId: {
+    mentorUserId: {
       type: String,
       required: true,
       trim: true,
-      ref: 'Mentor',
+      ref: 'User',
     },
     requestStatus: {
       type: String,

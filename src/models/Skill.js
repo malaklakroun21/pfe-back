@@ -59,11 +59,10 @@ const skillSchema = new mongoose.Schema(
     validatedBy: {
       type: String,
       trim: true,
-      ref: 'Mentor',
+      ref: 'User',
     },
     validatedAt: {
       type: Date,
-    
     },
     createdAt: {
       type: Date,

@@ -127,7 +127,7 @@ const serializeAdminProfile = (adminProfile) => {
   const plainAdmin = toPlainObject(adminProfile);
 
   return {
-    adminId: plainAdmin.adminId,
+
     userId: plainAdmin.userId,
     permissions: normalizePermissionList(plainAdmin.permissions, {
       fallbackToDefault: true,
@@ -645,7 +645,7 @@ const updateReport = async (id, payload = {}, currentUser, options = {}) => {
   const adminAccess = await buildAdminAccessContext(currentUser);
   const nextStatus = normalizeReportStatus(payload.reportStatus);
   report.reportStatus = nextStatus;
-  report.assignedTo = adminAccess.adminProfile.adminId;
+  report.assignedTo = adminAccess.adminProfile.userId;
 
   if (payload.resolution !== undefined) {
     report.resolution = payload.resolution.trim();
@@ -695,7 +695,7 @@ const updateSetting = async (key, payload = {}, currentUser, options = {}) => {
 
   setting.settingValue = String(payload.value);
   setting.description = payload.description !== undefined ? payload.description.trim() : '';
-  setting.updatedBy = adminAccess.adminProfile.adminId;
+  setting.updatedBy = adminAccess.adminProfile.userId;
   setting.updatedAt = new Date();
 
   await setting.save();

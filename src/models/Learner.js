@@ -2,17 +2,11 @@ const mongoose = require('mongoose');
 
 const learnerSchema = new mongoose.Schema(
   {
-    learnerId: {
-      type: String,
-      required: true,
-      unique: true,
-      index: true,
-      trim: true,
-    },
     userId: {
       type: String,
       required: true,
       unique: true,
+      index: true,
       trim: true,
       ref: 'User',
     },
@@ -39,13 +33,13 @@ const learnerSchema = new mongoose.Schema(
       type: Number,
       default: 0,
       min: 0,
-      max: 5
+      max: 5,
     },
     averageRatingAsLearner: {
       type: Number,
       default: 0,
       min: 0,
-      max: 5
+      max: 5,
     },
     profileCompleted: {
       type: Boolean,

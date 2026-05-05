@@ -27,7 +27,7 @@ const systemSettingsSchema = new mongoose.Schema(
     updatedBy: {
       type: String,
       trim: true,
-      ref: 'Admin',
+      ref: 'User',
     },
     updatedAt: {
       type: Date,

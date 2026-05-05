@@ -2,19 +2,13 @@ const mongoose = require('mongoose');
 
 const mentorSchema = new mongoose.Schema(
   {
-    mentorId: {
+    userId: {
       type: String,
       required: true,
       unique: true,
       index: true,
       trim: true,
-    },
-    learnerId: {
-      type: String,
-      required: true,
-      unique: true,
-      trim: true,
-      ref: 'Learner',
+      ref: 'User',
     },
     verificationStatus: {
       type: String,
@@ -37,7 +31,7 @@ const mentorSchema = new mongoose.Schema(
     verifiedBy: {
       type: String,
       trim: true,
-      ref: 'Admin',
+      ref: 'User',
     },
     suspendedAt: {
       type: Date,

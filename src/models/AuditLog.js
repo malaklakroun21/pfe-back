@@ -9,10 +9,10 @@ const auditLogSchema = new mongoose.Schema(
       index: true,
       trim: true,
     },
-    adminId: {
+    adminUserId: {
       type: String,
       trim: true,
-      ref: 'Admin',
+      ref: 'User',
     },
     userId: {
       type: String,

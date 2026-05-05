@@ -9,11 +9,11 @@ const mentorApplicationSchema = new mongoose.Schema(
       index: true,
       trim: true,
     },
-    learnerId: {
+    userId: {
       type: String,
       required: true,
       trim: true,
-      ref: 'Learner',
+      ref: 'User',
     },
     skillCategoryId: {
       type: String,
@@ -42,7 +42,7 @@ const mentorApplicationSchema = new mongoose.Schema(
     reviewedBy: {
       type: String,
       trim: true,
-      ref: 'Admin',
+      ref: 'User',
     },
     rejectionReason: {
       type: String,

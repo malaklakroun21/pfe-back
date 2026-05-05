@@ -29,10 +29,10 @@ const skillCategorySchema = new mongoose.Schema(
       trim: true,
       default: '',
     },
-    assignedAdminId: {
+    assignedAdminUserId: {
       type: String,
       trim: true,
-      ref: 'Admin',
+      ref: 'User',
     },
     createdAt: {
       type: Date,

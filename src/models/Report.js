@@ -51,7 +51,7 @@ const reportSchema = new mongoose.Schema(
     assignedTo: {
       type: String,
       trim: true,
-      ref: 'Admin',
+      ref: 'User',
     },
     resolution: {
       type: String,

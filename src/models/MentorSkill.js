@@ -9,11 +9,11 @@ const mentorSkillSchema = new mongoose.Schema(
       index: true,
       trim: true,
     },
-    mentorId: {
+    userId: {
       type: String,
       required: true,
       trim: true,
-      ref: 'Mentor',
+      ref: 'User',
     },
     skillCategoryId: {
       type: String,
@@ -32,7 +32,7 @@ const mentorSkillSchema = new mongoose.Schema(
     verifiedBy: {
       type: String,
       trim: true,
-      ref: 'Admin',
+      ref: 'User',
     },
     isActive: {
       type: Boolean,

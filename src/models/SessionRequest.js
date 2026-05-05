@@ -13,13 +13,13 @@ const sessionRequestSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
-      ref: 'Learner',
+      ref: 'User',
     },
     teacherId: {
       type: String,
       required: true,
       trim: true,
-      ref: 'Learner',
+      ref: 'User',
     },
     skillId: {
       type: String,

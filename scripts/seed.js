@@ -87,12 +87,7 @@ const ids = {
     mentor: 'USER-MENTOR-001',
     learner: 'USER-LEARNER-001',
   },
-  learners: {
-    mentor: 'LEARNER-001',
-    learner: 'LEARNER-002',
-  },
-  admin: 'ADMIN-001',
-  mentor: 'MENTOR-001',
+
   categories: {
     technology: 'CATEGORY-TECH-001',
     web: 'CATEGORY-WEB-001',
@@ -256,7 +251,6 @@ const getSeedData = async () => {
 
   const learners = [
     {
-      learnerId: ids.learners.mentor,
       userId: ids.users.mentor,
       learningGoals: 'Keep exploring system design and mentoring workflows.',
       preferredLearningStyle: 'Project-based',
@@ -267,7 +261,6 @@ const getSeedData = async () => {
       profileCompleted: true,
     },
     {
-      learnerId: ids.learners.learner,
       userId: ids.users.learner,
       learningGoals: 'Build production-ready full-stack applications.',
       preferredLearningStyle: 'Hands-on',
@@ -281,7 +274,6 @@ const getSeedData = async () => {
 
   const admins = [
     {
-      adminId: ids.admin,
       userId: ids.users.admin,
       assignedSkillCategoryId: ids.categories.technology,
       skillName: 'Platform governance',
@@ -308,7 +300,7 @@ const getSeedData = async () => {
       parentCategoryId: '',
       description: 'Technical skills across software, data, and digital tools.',
       iconUrl: '',
-      assignedAdminId: ids.admin,
+      assignedAdminUserId: ids.users.admin,
       createdAt: at(-120),
       isActive: true,
     },
@@ -318,7 +310,7 @@ const getSeedData = async () => {
       parentCategoryId: ids.categories.technology,
       description: 'Frontend, backend, and API development skills.',
       iconUrl: '',
-      assignedAdminId: ids.admin,
+      assignedAdminUserId: ids.users.admin,
       createdAt: at(-115),
       isActive: true,
     },
@@ -328,7 +320,7 @@ const getSeedData = async () => {
       parentCategoryId: ids.categories.technology,
       description: 'Database design, querying, and data modeling.',
       iconUrl: '',
-      assignedAdminId: ids.admin,
+      assignedAdminUserId: ids.users.admin,
       createdAt: at(-115),
       isActive: true,
     },
@@ -338,7 +330,7 @@ const getSeedData = async () => {
       parentCategoryId: '',
       description: 'UI, UX, research, and product discovery skills.',
       iconUrl: '',
-      assignedAdminId: ids.admin,
+      assignedAdminUserId: ids.users.admin,
       createdAt: at(-110),
       isActive: true,
     },
@@ -346,13 +338,12 @@ const getSeedData = async () => {
 
   const mentors = [
     {
-      mentorId: ids.mentor,
-      learnerId: ids.learners.mentor,
+      userId: ids.users.mentor,
       verificationStatus: 'VERIFIED',
       totalValidationsPerformed: 4,
       averageValidationRating: decimal('4.8'),
       verifiedAt: at(-60),
-      verifiedBy: ids.admin,
+      verifiedBy: ids.users.admin,
       suspendedAt: null,
       suspensionReason: '',
     },
@@ -370,7 +361,7 @@ const getSeedData = async () => {
       selfDeclared: false,
       validationStatus: 'VALIDATED',
       validationScore: 95,
-      validatedBy: ids.mentor,
+      validatedBy: ids.users.mentor,
       validatedAt: at(-55),
       createdAt: at(-95),
       lastUpdated: at(-10),
@@ -386,7 +377,7 @@ const getSeedData = async () => {
       selfDeclared: false,
       validationStatus: 'VALIDATED',
       validationScore: 91,
-      validatedBy: ids.mentor,
+      validatedBy: ids.users.mentor,
       validatedAt: at(-54),
       createdAt: at(-95),
       lastUpdated: at(-8),
@@ -410,20 +401,20 @@ const getSeedData = async () => {
   const mentorSkills = [
     {
       mentorSkillId: ids.mentorSkills.node,
-      mentorId: ids.mentor,
+      userId: ids.users.mentor,
       skillCategoryId: ids.categories.web,
       skillName: 'Node.js Backend Development',
       verificationDate: at(-60),
-      verifiedBy: ids.admin,
+      verifiedBy: ids.users.admin,
       isActive: true,
     },
     {
       mentorSkillId: ids.mentorSkills.mongo,
-      mentorId: ids.mentor,
+      userId: ids.users.mentor,
       skillCategoryId: ids.categories.data,
       skillName: 'MongoDB Data Modeling',
       verificationDate: at(-60),
-      verifiedBy: ids.admin,
+      verifiedBy: ids.users.admin,
       isActive: true,
     },
   ];
@@ -431,7 +422,7 @@ const getSeedData = async () => {
   const mentorApplications = [
     {
       applicationId: ids.application,
-      learnerId: ids.learners.learner,
+      userId: ids.users.learner,
       skillCategoryId: ids.categories.web,
       skillName: 'Frontend Mentoring',
       applicationStatus: 'PENDING',
@@ -483,8 +474,8 @@ const getSeedData = async () => {
     {
       requestId: ids.validationRequest,
       skillId: ids.skills.react,
-      learnerId: ids.learners.learner,
-      mentorId: ids.mentor,
+      learnerUserId: ids.users.learner,
+      mentorUserId: ids.users.mentor,
       requestStatus: 'IN_REVIEW',
       submittedAt: at(-3),
       validationFeedback: 'Waiting for mentor review and live walkthrough.',
@@ -532,8 +523,8 @@ const getSeedData = async () => {
   const sessionRequests = [
     {
       requestId: ids.sessionRequest,
-      learnerId: ids.learners.learner,
-      teacherId: ids.learners.mentor,
+      learnerId: ids.users.learner,
+      teacherId: ids.users.mentor,
       skillId: ids.skills.node,
       requestStatus: 'COMPLETED',
       preferredDuration: 90,
@@ -548,8 +539,8 @@ const getSeedData = async () => {
     {
       sessionId: ids.session,
       requestId: ids.sessionRequest,
-      learnerId: ids.learners.learner,
-      teacherId: ids.learners.mentor,
+      learnerId: ids.users.learner,
+      teacherId: ids.users.mentor,
       skillId: ids.skills.node,
       sessionStatus: 'COMPLETED',
       startTime: at(-1, 6),
@@ -610,10 +601,10 @@ const getSeedData = async () => {
   const auditLogs = [
     {
       auditId: ids.audit,
-      adminId: ids.admin,
+      adminUserId: ids.users.admin,
       userId: ids.users.mentor,
       actionType: 'MENTOR_VERIFIED',
-      targetEntityId: ids.mentor,
+      targetEntityId: ids.users.mentor,
       targetEntityType: 'Mentor',
       details: {
         verificationStatus: 'VERIFIED',
@@ -633,7 +624,7 @@ const getSeedData = async () => {
       totalEarned: 0,
       totalSpent: 0,
       lastUpdated: at(-1),
-      updatedBy: ids.admin,
+      updatedBy: ids.users.admin,
     },
     {
       balanceId: ids.balances.mentor,
@@ -642,7 +633,7 @@ const getSeedData = async () => {
       totalEarned: 12,
       totalSpent: 0,
       lastUpdated: at(-1, 8),
-      updatedBy: ids.admin,
+      updatedBy: ids.users.admin,
     },
     {
       balanceId: ids.balances.learner,
@@ -651,7 +642,7 @@ const getSeedData = async () => {
       totalEarned: 10,
       totalSpent: 6,
       lastUpdated: at(-1, 8),
-      updatedBy: ids.admin,
+      updatedBy: ids.users.admin,
     },
   ];
 
@@ -664,7 +655,7 @@ const getSeedData = async () => {
       description: 'Initial credit allocation for a new active learner.',
       balanceBefore: 0,
       balanceAfter: 10,
-      initiatedBy: ids.admin,
+      initiatedBy: ids.users.admin,
       createdAt: at(-75),
     },
     {
@@ -675,7 +666,7 @@ const getSeedData = async () => {
       description: 'Initial credit allocation for a newly verified mentor.',
       balanceBefore: 0,
       balanceAfter: 6,
-      initiatedBy: ids.admin,
+      initiatedBy: ids.users.admin,
       createdAt: at(-100),
     },
     {
@@ -699,7 +690,7 @@ const getSeedData = async () => {
       description: 'Credits earned from teaching a completed session.',
       balanceBefore: 6,
       balanceAfter: 12,
-      initiatedBy: ids.admin,
+      initiatedBy: ids.users.admin,
       createdAt: at(-1, 8),
     },
   ];
@@ -710,7 +701,7 @@ const getSeedData = async () => {
       settingKey: 'initial_credit_allocation',
       settingValue: '10',
       description: 'Default credits assigned to new active users.',
-      updatedBy: ids.admin,
+      updatedBy: ids.users.admin,
       updatedAt: at(-20),
     },
     {
@@ -718,7 +709,7 @@ const getSeedData = async () => {
       settingKey: 'default_session_credit_rate',
       settingValue: '6',
       description: 'Default credits exchanged for a standard session.',
-      updatedBy: ids.admin,
+      updatedBy: ids.users.admin,
       updatedAt: at(-20),
     },
   ];
@@ -776,13 +767,13 @@ const getSeedData = async () => {
     {
       name: 'learners',
       model: Learner,
-      key: 'learnerId',
+      key: 'userId',
       docs: learners,
     },
     {
       name: 'admins',
       model: Admin,
-      key: 'adminId',
+      key: 'userId',
       docs: admins,
     },
     {
@@ -794,7 +785,7 @@ const getSeedData = async () => {
     {
       name: 'mentors',
       model: Mentor,
-      key: 'mentorId',
+      key: 'userId',
       docs: mentors,
     },
     {

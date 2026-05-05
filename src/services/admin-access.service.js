@@ -1,5 +1,3 @@
-const { randomUUID } = require('crypto');
-
 const Admin = require('../models/Admin');
 const ApiError = require('../utils/ApiError');
 const {
@@ -51,10 +49,6 @@ const normalizePermissionList = (permissions, { fallbackToDefault = false } = {}
   return uniquePermissions;
 };
 
-const buildAdminId = () => {
-  return `ADM-${randomUUID()}`;
-};
-
 const ensureAdminProfileForUser = async (user, options = {}) => {
   if (!user?.userId) {
     throw new ApiError(401, 'Authentication required', 'AUTH_REQUIRED');
@@ -72,7 +66,6 @@ const ensureAdminProfileForUser = async (user, options = {}) => {
 
   if (!adminProfile) {
     adminProfile = await Admin.create({
-      adminId: buildAdminId(),
       userId: user.userId,
       assignedSkillCategoryId: '',
       skillName: '',

@@ -31,7 +31,7 @@ const createAuditLog = async ({
   reason = '',
   ipAddress = '',
 }) => {
-  if (!adminProfile?.adminId) {
+  if (!adminProfile?.userId) {
     throw new ApiError(403, 'Admin profile is required for audit logging', 'FORBIDDEN');
   }
 
@@ -41,7 +41,7 @@ const createAuditLog = async ({
 
   const auditLog = await AuditLog.create({
     auditId: `AUD-${randomUUID()}`,
-    adminId: adminProfile.adminId,
+    adminUserId: adminProfile.userId,
     userId: String(userId || '').trim(),
     actionType: String(actionType).trim().toUpperCase(),
     targetEntityId: String(targetEntityId || '').trim(),
@@ -65,8 +65,9 @@ const listAuditLogs = async (query = {}) => {
     filter.actionType = query.actionType.trim().toUpperCase();
   }
 
-  if (query.adminId?.trim()) {
-    filter.adminId = query.adminId.trim();
+  const adminUserId = query.adminUserId?.trim() || query.adminId?.trim();
+  if (adminUserId) {
+    filter.adminUserId = adminUserId;
   }
 
   if (query.userId?.trim()) {
