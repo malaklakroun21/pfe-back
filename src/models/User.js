@@ -81,6 +81,13 @@ const userSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.Decimal128,
     default: () => mongoose.Types.Decimal128.fromString('0'),
   },
+  passwordResetToken: { 
+    type: String, select: false 
+  },
+  passwordResetExpires: { 
+    type: Date, select: false 
+  },
+
 });
 
 module.exports = mongoose.models.User || mongoose.model('User', userSchema);
