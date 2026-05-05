@@ -44,6 +44,14 @@ const sessionSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    actualDuration: {
+      type: Number,
+      min: 0.01,
+    },
+    chargedCredits: {
+      type: Number,
+      min: 0.01,
+    },
     status: {
       type: String,
       enum: ['PENDING', 'ACCEPTED', 'REJECTED', 'COMPLETED'],

@@ -31,7 +31,7 @@ This is the main source directory. Everything inside here is the application cod
 | `middleware/`   | Reusable Express middleware (auth, validation, errors)     |
 | `utils/`        | Pure helper functions (ApiError, ApiResponse, JWT, hash)   |
 | `validators/`   | Joi schemas for validating incoming request bodies/params  |
-| `sockets/`      | Socket.io event handlers (real-time features, planned)     |
+| `sockets/`      | Socket.io event handlers for chat, presence, and sessions  |
 
 ---
 

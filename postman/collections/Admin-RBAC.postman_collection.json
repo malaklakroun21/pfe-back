@@ -14,14 +14,18 @@
           {
             "key": "Content-Type",
             "value": "application/json"
+          },
+          {
+            "key": "x-admin-bootstrap-secret",
+            "value": "{{adminBootstrapSecret}}"
           }
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"email\": \"admin1@test.com\",\n  \"password\": \"Password123\",\n  \"firstName\": \"Super\",\n  \"lastName\": \"Admin\",\n  \"role\": \"ADMIN\"\n}"
+          "raw": "{\n  \"email\": \"admin1@test.com\",\n  \"password\": \"Password123\",\n  \"firstName\": \"Super\",\n  \"lastName\": \"Admin\"\n}"
         },
         "url": {
-          "raw": "{{baseUrl}}/api/v1/auth/register",
+          "raw": "{{baseUrl}}/api/v1/auth/register-admin",
           "host": [
             "{{baseUrl}}"
           ],
@@ -29,7 +33,7 @@
             "api",
             "v1",
             "auth",
-            "register"
+            "register-admin"
           ]
         }
       },
@@ -375,6 +379,10 @@
     {
       "key": "baseUrl",
       "value": "http://localhost:5000"
+    },
+    {
+      "key": "adminBootstrapSecret",
+      "value": ""
     },
     {
       "key": "adminToken",

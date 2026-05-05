@@ -1,9 +1,15 @@
 const messageService = require('../services/message.service');
 const ApiResponse = require('../utils/ApiResponse');
+const { emitChatMessage, emitChatReadUpdate } = require('../sockets/gateway');
 
 const sendMessage = async (req, res, next) => {
   try {
     const result = await messageService.sendMessage(req.user, req.body);
+    emitChatMessage({
+      senderUserId: req.user.userId,
+      recipientUserId: req.body.recipientUserId,
+      payload: result,
+    });
     res.status(201).json(new ApiResponse(201, result, 'Message sent successfully'));
   } catch (error) {
     next(error);
@@ -31,6 +37,13 @@ const getConversationWithUser = async (req, res, next) => {
 const markMessageAsRead = async (req, res, next) => {
   try {
     const result = await messageService.markMessageAsRead(req.user, req.params.id);
+    const participantUserIds = await messageService.getConversationParticipantUserIds(
+      result.conversationId
+    );
+    emitChatReadUpdate({
+      participantUserIds,
+      payload: result,
+    });
     res.status(200).json(new ApiResponse(200, result, 'Message marked as read'));
   } catch (error) {
     next(error);

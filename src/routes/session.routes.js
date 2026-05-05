@@ -3,7 +3,10 @@ const express = require('express');
 const sessionController = require('../controllers/session.controller');
 const protect = require('../middleware/auth.middleware');
 const validate = require('../middleware/validate.middleware');
-const { createSessionRequestSchema } = require('../validators/session.validator');
+const {
+  createSessionRequestSchema,
+  completeSessionSchema,
+} = require('../validators/session.validator');
 
 const router = express.Router();
 
@@ -17,6 +20,6 @@ router.get('/', sessionController.listSessions);
 router.patch('/:id/accept', sessionController.acceptSession);
 router.patch('/:id/reject', sessionController.rejectSession);
 // Session completion triggers credit transfer.
-router.patch('/:id/complete', sessionController.completeSession);
+router.patch('/:id/complete', validate(completeSessionSchema), sessionController.completeSession);
 
 module.exports = router;

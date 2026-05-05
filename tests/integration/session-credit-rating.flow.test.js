@@ -306,10 +306,15 @@ describe('session + credit + rating flow', () => {
 
     const completeResponse = await request(app)
       .patch(`/api/v1/sessions/${sessionId}/complete`)
-      .set('Authorization', 'Bearer teacher-token');
+      .set('Authorization', 'Bearer teacher-token')
+      .send({
+        actualDuration: 2.5,
+      });
 
     expect(completeResponse.status).toBe(200);
     expect(completeResponse.body.data.status).toBe('COMPLETED');
+    expect(completeResponse.body.data.actualDuration).toBe(2.5);
+    expect(completeResponse.body.data.chargedCredits).toBe(2);
     expect(completeResponse.body.data.creditsTransferred).toBe(true);
 
     const learnerAfter = users.find((user) => user.userId === 'USR-LEARNER');
@@ -369,5 +374,50 @@ describe('session + credit + rating flow', () => {
     expect(teacherRatingsResponse.status).toBe(200);
     expect(teacherRatingsResponse.body.data.averageRating).toBe(5);
     expect(teacherRatingsResponse.body.data.totalReviews).toBe(1);
+  });
+
+  it('charges only the actual duration when the session ends early', async () => {
+    const createResponse = await request(app)
+      .post('/api/v1/sessions/request')
+      .set('Authorization', 'Bearer learner-token')
+      .send({
+        teacherId: 'USR-TEACHER',
+        skill: 'MongoDB',
+        duration: 2,
+        date: '2026-06-06T10:00:00.000Z',
+        message: 'Need schema design help',
+      });
+
+    const sessionId = createResponse.body.data.sessionId;
+
+    const acceptResponse = await request(app)
+      .patch(`/api/v1/sessions/${sessionId}/accept`)
+      .set('Authorization', 'Bearer teacher-token');
+
+    expect(acceptResponse.status).toBe(200);
+
+    const completeResponse = await request(app)
+      .patch(`/api/v1/sessions/${sessionId}/complete`)
+      .set('Authorization', 'Bearer teacher-token')
+      .send({
+        actualDuration: 1.5,
+      });
+
+    expect(completeResponse.status).toBe(200);
+    expect(completeResponse.body.data.actualDuration).toBe(1.5);
+    expect(completeResponse.body.data.chargedCredits).toBe(1.5);
+
+    const learnerAfter = users.find((user) => user.userId === 'USR-LEARNER');
+    const teacherAfter = users.find((user) => user.userId === 'USR-TEACHER');
+    expect(learnerAfter.timeCredits).toBe(8.5);
+    expect(teacherAfter.timeCredits).toBe(2.5);
+    expect(transactions).toHaveLength(1);
+    expect(transactions[0]).toMatchObject({
+      fromUser: 'USR-LEARNER',
+      toUser: 'USR-TEACHER',
+      amount: 1.5,
+      sessionId,
+      type: 'TRANSFER',
+    });
   });
 });

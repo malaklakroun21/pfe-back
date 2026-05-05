@@ -28,6 +28,29 @@ const normalizeSessionId = (sessionId) => {
   return normalizedSessionId;
 };
 
+const parsePositiveDuration = (value, fieldName) => {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  const parsed = Number(value);
+
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new ApiError(400, `${fieldName} must be greater than 0`, 'VALIDATION_ERROR');
+  }
+
+  return parsed;
+};
+
+const resolveCompletionDurations = (scheduledDuration, rawActualDuration) => {
+  const actualDuration = parsePositiveDuration(rawActualDuration, 'actualDuration') ?? scheduledDuration;
+
+  return {
+    actualDuration,
+    chargedCredits: Math.min(scheduledDuration, actualDuration),
+  };
+};
+
 // Keep participant payload lightweight when listing sessions.
 const sanitizePublicUser = (user) => {
   if (!user) {
@@ -185,7 +208,7 @@ const rejectSession = async (currentUser, sessionId) => {
 };
 
 // Completes session + transfers credits atomically in one DB transaction.
-const completeSession = async (currentUser, sessionId) => {
+const completeSession = async (currentUser, sessionId, payload = {}) => {
   const user = ensureAuthenticatedUser(currentUser);
   const mongoSession = await mongoose.startSession();
 
@@ -207,15 +230,22 @@ const completeSession = async (currentUser, sessionId) => {
         throw new ApiError(409, 'Only accepted sessions can be completed', 'SESSION_INVALID_STATUS');
       }
 
-      // Transfer amount is based on session duration (1 hour = 1 credit).
+      const { actualDuration, chargedCredits } = resolveCompletionDurations(
+        session.duration,
+        payload.actualDuration
+      );
+
+      // Transfer amount is capped by the booked duration (1 hour = 1 credit).
       await creditService.transferCredits({
         fromUserId: session.learnerId,
         toUserId: session.teacherId,
-        amount: session.duration,
+        amount: chargedCredits,
         sessionId: session.sessionId,
         mongoSession,
       });
 
+      session.actualDuration = actualDuration;
+      session.chargedCredits = chargedCredits;
       session.status = 'COMPLETED';
       session.creditsTransferred = true;
       session.completedAt = new Date();

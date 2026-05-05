@@ -2,78 +2,106 @@
 
 Real-time WebSocket event handlers using [Socket.io](https://socket.io/).
 
-> **Status:** Planned — folder is scaffolded but not yet implemented.
+## Status
 
----
+This module is implemented and currently powers:
 
-## Purpose
+- authenticated chat events
+- message read receipts
+- online/offline presence updates
+- session lifecycle updates
+- socket-based resync helpers for chat and sessions
 
-Some features of the Skill Exchange platform require real-time communication:
+## Implemented Files
 
-| Feature                        | Socket event (planned)           |
-|--------------------------------|----------------------------------|
-| Live chat between users        | `message:send`, `message:receive`|
-| Session status notifications   | `session:updated`                |
-| Online presence indicators     | `user:online`, `user:offline`    |
-
----
-
-## Planned Structure
-
-```
+```text
 sockets/
-├── index.js          # Initialises Socket.io server and registers namespaces
-├── chat.socket.js    # Handles messaging events
-└── session.socket.js # Handles session lifecycle events
+|- index.js             # Initializes Socket.IO server + auth middleware
+|- chat.socket.js       # Chat send/read/sync events
+|- session.socket.js    # Session request/list/update events
+|- presence.socket.js   # Presence lookup events
+|- presence.service.js  # In-memory online/offline tracking
+|- gateway.js           # Shared emit helpers used by HTTP + sockets
+|- socket.utils.js      # Ack/error/validation/rate-limit helpers
 ```
 
-### `index.js` (planned)
+## Authentication
+
+Socket connections require a JWT in the handshake:
 
 ```js
-const { Server } = require('socket.io');
-
-const initSockets = (httpServer) => {
-  const io = new Server(httpServer, {
-    cors: { origin: process.env.CLIENT_URL, credentials: true },
-  });
-
-  io.on('connection', (socket) => {
-    require('./chat.socket')(io, socket);
-    require('./session.socket')(io, socket);
-  });
-};
-
-module.exports = initSockets;
-```
-
-Then in `server.js`:
-```js
-const server = http.createServer(app);
-initSockets(server);
-server.listen(PORT);
-```
-
----
-
-## Authentication with Sockets
-
-Socket connections from authenticated users must pass a JWT in the handshake:
-
-```js
-// Client-side
 const socket = io('http://localhost:5000', {
-  auth: { token: 'Bearer <jwt>' },
+  auth: {
+    token: 'Bearer <jwt>',
+  },
 });
 ```
 
-A middleware on the Socket.io server will verify the token and attach the user before any event is handled.
+The server validates the token, loads the user, rejects inactive accounts, and joins the room:
 
----
-
-## Getting Started
-
-To implement this module, install Socket.io:
-
-```bash
-npm install socket.io
+```text
+user:<userId>
 ```
+
+## Chat Events
+
+Client emits:
+
+- `chat:send`
+  payload: `{ recipientUserId, content }`
+- `chat:read`
+  payload: `{ messageId }`
+- `chat:listConversations`
+  payload: optional empty object
+- `chat:getConversation`
+  payload: `{ userId }`
+
+Server emits:
+
+- `chat:message`
+- `chat:read:update`
+- `socket:error`
+
+## Presence Events
+
+Client emits:
+
+- `presence:get`
+  payload: `{ userIds: [...] }`
+
+Server emits:
+
+- `presence:update`
+
+Each presence payload has:
+
+```json
+{
+  "userId": "USR-123",
+  "isOnline": true,
+  "connections": 1
+}
+```
+
+## Session Events
+
+Client emits:
+
+- `session:list`
+- `session:request`
+- `session:accept`
+- `session:reject`
+- `session:complete`
+
+Server emits:
+
+- `session:updated`
+
+Session updates are also emitted when the corresponding HTTP endpoints are used, so REST and socket flows stay in sync.
+
+## Notes
+
+- Socket payloads are validated before hitting the service layer.
+- Basic in-memory rate limiting is applied to chat, presence, and session events.
+- Presence tracking is currently in-memory, which is fine for a single backend instance.
+- Multi-instance deployments would need a shared adapter/store such as Redis.

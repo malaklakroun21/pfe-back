@@ -10,6 +10,18 @@ const register = async (req, res, next) => {
   }
 };
 
+const registerAdmin = async (req, res, next) => {
+  try {
+    const result = await authService.registerAdmin(req.body, {
+      bootstrapSecret: req.headers['x-admin-bootstrap-secret'],
+      ipAddress: req.ip,
+    });
+    res.status(201).json(new ApiResponse(201, result, 'Admin registered successfully'));
+  } catch (error) {
+    next(error);
+  }
+};
+
 const login = async (req, res, next) => {
   try {
     const result = await authService.login(req.body);
@@ -21,5 +33,6 @@ const login = async (req, res, next) => {
 
 module.exports = {
   register,
+  registerAdmin,
   login,
 };

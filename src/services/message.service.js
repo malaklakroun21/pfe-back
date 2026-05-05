@@ -302,9 +302,26 @@ const markMessageAsRead = async (currentUser, messageId) => {
   return serializeMessage(message);
 };
 
+const getConversationParticipantUserIds = async (conversationId) => {
+  const sanitizedConversationId = conversationId?.trim();
+
+  if (!sanitizedConversationId) {
+    throw new ApiError(400, 'Conversation id is required', 'VALIDATION_ERROR');
+  }
+
+  const conversation = await Conversation.findOne({ conversationId: sanitizedConversationId });
+
+  if (!conversation) {
+    throw new ApiError(404, 'Conversation not found', 'CONVERSATION_NOT_FOUND');
+  }
+
+  return [conversation.participant1Id, conversation.participant2Id];
+};
+
 module.exports = {
   sendMessage,
   listConversations,
   getConversationWithUser,
   markMessageAsRead,
+  getConversationParticipantUserIds,
 };

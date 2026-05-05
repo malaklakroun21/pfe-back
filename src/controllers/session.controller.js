@@ -1,10 +1,12 @@
 const sessionService = require('../services/session.service');
 const ApiResponse = require('../utils/ApiResponse');
+const { emitSessionUpdate } = require('../sockets/gateway');
 
 // POST /sessions/request
 const requestSession = async (req, res, next) => {
   try {
     const session = await sessionService.requestSession(req.user, req.body);
+    emitSessionUpdate(session);
     res.status(201).json(new ApiResponse(201, session, 'Session requested successfully'));
   } catch (error) {
     next(error);
@@ -25,6 +27,7 @@ const listSessions = async (req, res, next) => {
 const acceptSession = async (req, res, next) => {
   try {
     const session = await sessionService.acceptSession(req.user, req.params.id);
+    emitSessionUpdate(session);
     res.status(200).json(new ApiResponse(200, session, 'Session accepted successfully'));
   } catch (error) {
     next(error);
@@ -35,6 +38,7 @@ const acceptSession = async (req, res, next) => {
 const rejectSession = async (req, res, next) => {
   try {
     const session = await sessionService.rejectSession(req.user, req.params.id);
+    emitSessionUpdate(session);
     res.status(200).json(new ApiResponse(200, session, 'Session rejected successfully'));
   } catch (error) {
     next(error);
@@ -44,7 +48,8 @@ const rejectSession = async (req, res, next) => {
 // PATCH /sessions/:id/complete
 const completeSession = async (req, res, next) => {
   try {
-    const session = await sessionService.completeSession(req.user, req.params.id);
+    const session = await sessionService.completeSession(req.user, req.params.id, req.body);
+    emitSessionUpdate(session);
     res.status(200).json(new ApiResponse(200, session, 'Session completed successfully'));
   } catch (error) {
     next(error);

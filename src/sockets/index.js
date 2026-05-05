@@ -2,7 +2,11 @@ const { Server } = require('socket.io');
 
 const User = require('../models/User');
 const { verifyAccessToken } = require('../utils/jwt');
+const { emitPresenceUpdate, getUserRoom, setSocketServer } = require('./gateway');
 const registerChatSocket = require('./chat.socket');
+const registerPresenceSocket = require('./presence.socket');
+const { markUserConnected, markUserDisconnected } = require('./presence.service');
+const registerSessionSocket = require('./session.socket');
 
 const extractBearerToken = (rawToken) => {
   if (!rawToken) {
@@ -20,6 +24,7 @@ const initSockets = (httpServer) => {
       credentials: true,
     },
   });
+  setSocketServer(io);
 
   io.use(async (socket, next) => {
     try {
@@ -45,8 +50,18 @@ const initSockets = (httpServer) => {
   });
 
   io.on('connection', (socket) => {
-    socket.join(`user:${socket.user.userId}`);
+    socket.join(getUserRoom(socket.user.userId));
+    const presenceState = markUserConnected(socket.user.userId);
+    emitPresenceUpdate(presenceState, io);
+
     registerChatSocket(io, socket);
+    registerPresenceSocket(socket);
+    registerSessionSocket(io, socket);
+
+    socket.on('disconnect', () => {
+      const nextPresenceState = markUserDisconnected(socket.user.userId);
+      emitPresenceUpdate(nextPresenceState, io);
+    });
   });
 
   return io;

@@ -9,6 +9,12 @@ const createSessionRequestSchema = Joi.object({
   message: Joi.string().trim().allow('').max(1000).optional(),
 });
 
+// Payload contract for PATCH /sessions/:id/complete.
+const completeSessionSchema = Joi.object({
+  actualDuration: Joi.number().positive().optional(),
+});
+
 module.exports = {
   createSessionRequestSchema,
+  completeSessionSchema,
 };

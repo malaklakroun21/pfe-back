@@ -6,12 +6,17 @@ jest.mock('../../src/middleware/auth.middleware', () => {
     const token = req.headers.authorization?.replace('Bearer ', '').trim();
 
     if (token === 'admin-token') {
-      req.user = { userId: 'USR-ADMIN', role: 'admin' };
+      req.user = { userId: 'USR-ADMIN', role: 'admin', accountStatus: 'ACTIVE' };
+      return next();
+    }
+
+    if (token === 'admin-limited-token') {
+      req.user = { userId: 'USR-ADMIN-LIMITED', role: 'ADMIN', accountStatus: 'ACTIVE' };
       return next();
     }
 
     if (token === 'user-token') {
-      req.user = { userId: 'USR-USER-1', role: 'user' };
+      req.user = { userId: 'USR-USER-1', role: 'user', accountStatus: 'ACTIVE' };
       return next();
     }
 
@@ -25,36 +30,204 @@ jest.mock('../../src/models/User', () => ({
   countDocuments: jest.fn(),
 }));
 
+jest.mock('../../src/models/Admin', () => ({
+  find: jest.fn(),
+  findOne: jest.fn(),
+  create: jest.fn(),
+}));
+
+jest.mock('../../src/models/AuditLog', () => ({
+  find: jest.fn(),
+  create: jest.fn(),
+  countDocuments: jest.fn(),
+}));
+
+jest.mock('../../src/models/Report', () => ({
+  find: jest.fn(),
+  findOne: jest.fn(),
+  countDocuments: jest.fn(),
+}));
+
+jest.mock('../../src/models/SystemSettings', () => {
+  const SystemSettings = jest.fn(function SystemSettings(doc) {
+    return doc;
+  });
+
+  SystemSettings.find = jest.fn();
+  SystemSettings.findOne = jest.fn();
+  SystemSettings.countDocuments = jest.fn();
+
+  return SystemSettings;
+});
+
 const User = require('../../src/models/User');
+const Admin = require('../../src/models/Admin');
+const AuditLog = require('../../src/models/AuditLog');
+const Report = require('../../src/models/Report');
+const SystemSettings = require('../../src/models/SystemSettings');
 const adminRoutes = require('../../src/routes/admin');
 const errorHandler = require('../../src/middleware/error.middleware');
 
-const createQueryChain = (result) => ({
-  sort: jest.fn().mockReturnThis(),
-  skip: jest.fn().mockReturnThis(),
-  limit: jest.fn().mockResolvedValue(result),
-});
+const sortItems = (items, sortSpec = {}) => {
+  const [field, direction] = Object.entries(sortSpec)[0] || [];
 
-describe('admin routes RBAC and user management', () => {
+  if (!field) {
+    return [...items];
+  }
+
+  return [...items].sort((left, right) => {
+    const leftValue = left[field];
+    const rightValue = right[field];
+
+    if (leftValue === rightValue) {
+      return 0;
+    }
+
+    if (leftValue > rightValue) {
+      return direction > 0 ? 1 : -1;
+    }
+
+    return direction > 0 ? -1 : 1;
+  });
+};
+
+const matchesValue = (actual, expected) => {
+  if (expected instanceof RegExp) {
+    return expected.test(String(actual || ''));
+  }
+
+  if (expected && typeof expected === 'object' && !Array.isArray(expected)) {
+    if ('$in' in expected) {
+      return expected.$in.includes(actual);
+    }
+
+    if ('$ne' in expected) {
+      return actual !== expected.$ne;
+    }
+  }
+
+  if (Array.isArray(actual)) {
+    return actual.includes(expected);
+  }
+
+  return actual === expected;
+};
+
+const matchesFilter = (entity, filter = {}) => {
+  if (!filter || !Object.keys(filter).length) {
+    return true;
+  }
+
+  if (Array.isArray(filter.$and)) {
+    return filter.$and.every((clause) => matchesFilter(entity, clause));
+  }
+
+  const restEntries = Object.entries(filter).filter(([key]) => key !== '$or' && key !== '$and');
+  const restMatches = restEntries.every(([key, expected]) => matchesValue(entity[key], expected));
+
+  if (!restMatches) {
+    return false;
+  }
+
+  if (Array.isArray(filter.$or)) {
+    return filter.$or.some((clause) => matchesFilter(entity, clause));
+  }
+
+  return true;
+};
+
+const createQueryChain = (items) => {
+  let currentItems = [...items];
+
+  const chain = {
+    sort: jest.fn().mockImplementation((sortSpec) => {
+      currentItems = sortItems(currentItems, sortSpec);
+      return chain;
+    }),
+    skip: jest.fn().mockImplementation((count) => {
+      currentItems = currentItems.slice(count);
+      return chain;
+    }),
+    limit: jest.fn().mockImplementation((count) => {
+      return Promise.resolve(currentItems.slice(0, count));
+    }),
+    then: (resolve, reject) => Promise.resolve(currentItems).then(resolve, reject),
+    catch: (reject) => Promise.resolve(currentItems).catch(reject),
+  };
+
+  return chain;
+};
+
+describe('admin routes RBAC, moderation, and audit flows', () => {
   const app = express();
   app.use(express.json());
   app.use('/api/admin', adminRoutes);
   app.use(errorHandler);
 
   let users;
+  let adminProfiles;
+  let auditLogs;
+  let reports;
+  let settings;
 
-  const asDoc = (entity) => {
+  const asDocument = (collectionName, entity) => {
+    const collectionMap = {
+      users: () => users,
+      adminProfiles: () => adminProfiles,
+      auditLogs: () => auditLogs,
+      reports: () => reports,
+      settings: () => settings,
+    };
+    const setCollectionMap = {
+      users: (next) => {
+        users = next;
+      },
+      adminProfiles: (next) => {
+        adminProfiles = next;
+      },
+      auditLogs: (next) => {
+        auditLogs = next;
+      },
+      reports: (next) => {
+        reports = next;
+      },
+      settings: (next) => {
+        settings = next;
+      },
+    };
+    const getKey = {
+      users: 'userId',
+      adminProfiles: 'adminId',
+      auditLogs: 'auditId',
+      reports: 'reportId',
+      settings: 'settingId',
+    };
+
     return {
       ...entity,
       save: jest.fn().mockImplementation(async function save() {
-        const index = users.findIndex((item) => item.userId === this.userId);
-        users[index] = { ...users[index], ...this };
+        const collection = collectionMap[collectionName]();
+        const key = getKey[collectionName];
+        const index = collection.findIndex((item) => item[key] === this[key]);
+        const plain = this.toObject();
+
+        if (index === -1) {
+          setCollectionMap[collectionName]([...collection, plain]);
+          return;
+        }
+
+        const nextCollection = [...collection];
+        nextCollection[index] = plain;
+        setCollectionMap[collectionName](nextCollection);
       }),
       deleteOne: jest.fn().mockImplementation(async function deleteOne() {
-        users = users.filter((item) => item.userId !== this.userId);
+        const collection = collectionMap[collectionName]();
+        const key = getKey[collectionName];
+        setCollectionMap[collectionName](collection.filter((item) => item[key] !== this[key]));
       }),
       toObject: jest.fn().mockImplementation(function toObject() {
-        return { ...this };
+        const { save, deleteOne, toObject, ...plain } = this;
+        return { ...plain };
       }),
     };
   };
@@ -68,9 +241,30 @@ describe('admin routes RBAC and user management', () => {
         email: 'admin@test.com',
         passwordHash: 'secret',
         firstName: 'Admin',
-        lastName: 'User',
+        lastName: 'Owner',
         role: 'admin',
         accountStatus: 'ACTIVE',
+        createdAt: new Date('2026-05-01T09:00:00.000Z'),
+      },
+      {
+        userId: 'USR-ADMIN-2',
+        email: 'admin2@test.com',
+        passwordHash: 'secret',
+        firstName: 'Second',
+        lastName: 'Admin',
+        role: 'ADMIN',
+        accountStatus: 'ACTIVE',
+        createdAt: new Date('2026-05-02T09:00:00.000Z'),
+      },
+      {
+        userId: 'USR-ADMIN-LIMITED',
+        email: 'limited-admin@test.com',
+        passwordHash: 'secret',
+        firstName: 'Limited',
+        lastName: 'Admin',
+        role: 'ADMIN',
+        accountStatus: 'ACTIVE',
+        createdAt: new Date('2026-05-03T09:00:00.000Z'),
       },
       {
         userId: 'USR-USER-1',
@@ -80,6 +274,7 @@ describe('admin routes RBAC and user management', () => {
         lastName: 'User',
         role: 'user',
         accountStatus: 'ACTIVE',
+        createdAt: new Date('2026-05-04T09:00:00.000Z'),
       },
       {
         userId: 'USR-USER-2',
@@ -87,18 +282,175 @@ describe('admin routes RBAC and user management', () => {
         passwordHash: 'secret',
         firstName: 'Another',
         lastName: 'User',
-        role: 'user',
+        role: 'LEARNER',
         accountStatus: 'ACTIVE',
+        createdAt: new Date('2026-05-05T09:00:00.000Z'),
       },
     ];
 
-    User.find.mockImplementation(() => createQueryChain(users.map((u) => asDoc(u))));
-    User.countDocuments.mockResolvedValue(users.length);
-    User.findOne.mockImplementation(async (filter) => {
-      const user = users.find((candidate) =>
-        Object.entries(filter).every(([key, value]) => candidate[key] === value)
+    adminProfiles = [
+      {
+        adminId: 'ADM-1',
+        userId: 'USR-ADMIN',
+        permissions: [
+          'manage_users',
+          'manage_admins',
+          'moderate_users',
+          'review_reports',
+          'manage_settings',
+          'view_dashboard',
+          'view_audit_logs',
+        ],
+        assignedDate: new Date('2026-04-01T09:00:00.000Z'),
+        lastActiveDate: new Date('2026-05-01T09:00:00.000Z'),
+      },
+      {
+        adminId: 'ADM-2',
+        userId: 'USR-ADMIN-2',
+        permissions: [
+          'manage_users',
+          'manage_admins',
+          'moderate_users',
+          'review_reports',
+          'manage_settings',
+          'view_dashboard',
+          'view_audit_logs',
+        ],
+        assignedDate: new Date('2026-04-05T09:00:00.000Z'),
+        lastActiveDate: new Date('2026-05-01T10:00:00.000Z'),
+      },
+      {
+        adminId: 'ADM-3',
+        userId: 'USR-ADMIN-LIMITED',
+        permissions: ['manage_users'],
+        assignedDate: new Date('2026-04-10T09:00:00.000Z'),
+        lastActiveDate: new Date('2026-05-01T11:00:00.000Z'),
+      },
+    ];
+
+    auditLogs = [
+      {
+        auditId: 'AUD-1',
+        adminId: 'ADM-1',
+        userId: 'USR-USER-1',
+        actionType: 'ADMIN_USER_UPDATED',
+        targetEntityId: 'USR-USER-1',
+        targetEntityType: 'User',
+        details: {},
+        reason: '',
+        timestamp: new Date('2026-05-01T12:00:00.000Z'),
+        ipAddress: '',
+      },
+    ];
+
+    reports = [
+      {
+        reportId: 'RPT-1',
+        reporterId: 'USR-USER-1',
+        reportedUserId: 'USR-USER-2',
+        violationType: 'SPAM',
+        description: 'Spam behavior',
+        evidence: [],
+        reportStatus: 'PENDING',
+        assignedTo: '',
+        resolution: '',
+        createdAt: new Date('2026-05-02T12:00:00.000Z'),
+      },
+    ];
+
+    settings = [
+      {
+        settingId: 'SETTING-1',
+        settingKey: 'default_session_credit_rate',
+        settingValue: '6',
+        description: 'Default session credit rate',
+        updatedBy: 'ADM-1',
+        updatedAt: new Date('2026-05-01T13:00:00.000Z'),
+      },
+    ];
+
+    User.find.mockImplementation((filter = {}) => {
+      return createQueryChain(users.filter((user) => matchesFilter(user, filter)).map((user) => {
+        return asDocument('users', user);
+      }));
+    });
+
+    User.countDocuments.mockImplementation(async (filter = {}) => {
+      return users.filter((user) => matchesFilter(user, filter)).length;
+    });
+
+    User.findOne.mockImplementation(async (filter = {}) => {
+      const user = users.find((candidate) => matchesFilter(candidate, filter));
+      return user ? asDocument('users', user) : null;
+    });
+
+    Admin.find.mockImplementation(async (filter = {}) => {
+      return adminProfiles
+        .filter((profile) => matchesFilter(profile, filter))
+        .map((profile) => asDocument('adminProfiles', profile));
+    });
+
+    Admin.findOne.mockImplementation(async (filter = {}) => {
+      const adminProfile = adminProfiles.find((candidate) => matchesFilter(candidate, filter));
+      return adminProfile ? asDocument('adminProfiles', adminProfile) : null;
+    });
+
+    Admin.create.mockImplementation(async (payload) => {
+      adminProfiles.push({ ...payload });
+      return asDocument('adminProfiles', payload);
+    });
+
+    AuditLog.find.mockImplementation((filter = {}) => {
+      return createQueryChain(
+        auditLogs.filter((auditLog) => matchesFilter(auditLog, filter)).map((auditLog) => {
+          return asDocument('auditLogs', auditLog);
+        })
       );
-      return user ? asDoc(user) : null;
+    });
+
+    AuditLog.countDocuments.mockImplementation(async (filter = {}) => {
+      return auditLogs.filter((auditLog) => matchesFilter(auditLog, filter)).length;
+    });
+
+    AuditLog.create.mockImplementation(async (payload) => {
+      auditLogs.push({ ...payload });
+      return asDocument('auditLogs', payload);
+    });
+
+    Report.find.mockImplementation((filter = {}) => {
+      return createQueryChain(reports.filter((report) => matchesFilter(report, filter)).map((report) => {
+        return asDocument('reports', report);
+      }));
+    });
+
+    Report.countDocuments.mockImplementation(async (filter = {}) => {
+      return reports.filter((report) => matchesFilter(report, filter)).length;
+    });
+
+    Report.findOne.mockImplementation(async (filter = {}) => {
+      const report = reports.find((candidate) => matchesFilter(candidate, filter));
+      return report ? asDocument('reports', report) : null;
+    });
+
+    SystemSettings.mockImplementation(function MockSystemSettings(doc) {
+      return asDocument('settings', doc);
+    });
+
+    SystemSettings.find.mockImplementation((filter = {}) => {
+      return createQueryChain(
+        settings.filter((setting) => matchesFilter(setting, filter)).map((setting) => {
+          return asDocument('settings', setting);
+        })
+      );
+    });
+
+    SystemSettings.countDocuments.mockImplementation(async (filter = {}) => {
+      return settings.filter((setting) => matchesFilter(setting, filter)).length;
+    });
+
+    SystemSettings.findOne.mockImplementation(async (filter = {}) => {
+      const setting = settings.find((candidate) => matchesFilter(candidate, filter));
+      return setting ? asDocument('settings', setting) : null;
     });
   });
 
@@ -111,13 +463,22 @@ describe('admin routes RBAC and user management', () => {
     expect(response.body.error.code).toBe('FORBIDDEN');
   });
 
-  it('allows admin to list/get/update/promote/delete users', async () => {
+  it('blocks admins that do not have the required fine-grained permission', async () => {
+    const response = await request(app)
+      .get('/api/admin/dashboard')
+      .set('Authorization', 'Bearer admin-limited-token');
+
+    expect(response.status).toBe(403);
+    expect(response.body.error.code).toBe('FORBIDDEN');
+  });
+
+  it('allows full admins to manage users, moderation, settings, reports, and audit flows', async () => {
     const listResponse = await request(app)
       .get('/api/admin/users?page=1&limit=10')
       .set('Authorization', 'Bearer admin-token');
 
     expect(listResponse.status).toBe(200);
-    expect(listResponse.body.data.items).toHaveLength(3);
+    expect(listResponse.body.data.items).toHaveLength(5);
     expect(listResponse.body.data.items[0].passwordHash).toBeUndefined();
 
     const getSingleResponse = await request(app)
@@ -144,11 +505,90 @@ describe('admin routes RBAC and user management', () => {
       .patch('/api/admin/users/USR-USER-1/role')
       .set('Authorization', 'Bearer admin-token')
       .send({
-        role: 'admin',
+        role: 'ADMIN',
       });
 
     expect(roleResponse.status).toBe(200);
-    expect(roleResponse.body.data.role).toBe('admin');
+    expect(roleResponse.body.data.role).toBe('ADMIN');
+    expect(roleResponse.body.data.adminProfile.permissions).toContain('manage_users');
+
+    const permissionsResponse = await request(app)
+      .patch('/api/admin/users/USR-ADMIN-2/permissions')
+      .set('Authorization', 'Bearer admin-token')
+      .send({
+        permissions: ['manage_users', 'view_dashboard'],
+      });
+
+    expect(permissionsResponse.status).toBe(200);
+    expect(permissionsResponse.body.data.permissions).toEqual([
+      'manage_users',
+      'view_dashboard',
+    ]);
+
+    const statusResponse = await request(app)
+      .patch('/api/admin/users/USR-USER-2/status')
+      .set('Authorization', 'Bearer admin-token')
+      .send({
+        accountStatus: 'SUSPENDED',
+        reason: 'Repeated spam',
+      });
+
+    expect(statusResponse.status).toBe(200);
+    expect(statusResponse.body.data.accountStatus).toBe('SUSPENDED');
+
+    const dashboardResponse = await request(app)
+      .get('/api/admin/dashboard')
+      .set('Authorization', 'Bearer admin-token');
+
+    expect(dashboardResponse.status).toBe(200);
+    expect(dashboardResponse.body.data.users.total).toBe(5);
+    expect(dashboardResponse.body.data.users.admins).toBe(4);
+    expect(dashboardResponse.body.data.users.suspended).toBe(1);
+
+    const auditLogsResponse = await request(app)
+      .get('/api/admin/audit-logs?page=1&limit=20')
+      .set('Authorization', 'Bearer admin-token');
+
+    expect(auditLogsResponse.status).toBe(200);
+    expect(auditLogsResponse.body.data.items.length).toBeGreaterThan(1);
+
+    const reportsResponse = await request(app)
+      .get('/api/admin/reports')
+      .set('Authorization', 'Bearer admin-token');
+
+    expect(reportsResponse.status).toBe(200);
+    expect(reportsResponse.body.data.items).toHaveLength(1);
+
+    const updateReportResponse = await request(app)
+      .patch('/api/admin/reports/RPT-1')
+      .set('Authorization', 'Bearer admin-token')
+      .send({
+        reportStatus: 'UNDER_REVIEW',
+        resolution: '',
+      });
+
+    expect(updateReportResponse.status).toBe(200);
+    expect(updateReportResponse.body.data.reportStatus).toBe('UNDER_REVIEW');
+    expect(updateReportResponse.body.data.assignedTo).toBe('ADM-1');
+
+    const settingsResponse = await request(app)
+      .get('/api/admin/settings')
+      .set('Authorization', 'Bearer admin-token');
+
+    expect(settingsResponse.status).toBe(200);
+    expect(settingsResponse.body.data).toHaveLength(1);
+
+    const updateSettingResponse = await request(app)
+      .put('/api/admin/settings/default_session_credit_rate')
+      .set('Authorization', 'Bearer admin-token')
+      .send({
+        value: 8,
+        description: 'Updated by admin',
+      });
+
+    expect(updateSettingResponse.status).toBe(200);
+    expect(updateSettingResponse.body.data.settingValue).toBe('8');
+    expect(updateSettingResponse.body.data.description).toBe('Updated by admin');
 
     const deleteSelfResponse = await request(app)
       .delete('/api/admin/users/USR-ADMIN')
@@ -163,5 +603,49 @@ describe('admin routes RBAC and user management', () => {
 
     expect(deleteOtherResponse.status).toBe(200);
     expect(deleteOtherResponse.body.data.userId).toBe('USR-USER-2');
+  });
+
+  it('protects self-demotion, self-deactivation, and the last active admin', async () => {
+    const selfRoleResponse = await request(app)
+      .patch('/api/admin/users/USR-ADMIN/role')
+      .set('Authorization', 'Bearer admin-token')
+      .send({
+        role: 'user',
+      });
+
+    expect(selfRoleResponse.status).toBe(400);
+    expect(selfRoleResponse.body.error.code).toBe('SELF_ROLE_CHANGE_FORBIDDEN');
+
+    const selfStatusResponse = await request(app)
+      .patch('/api/admin/users/USR-ADMIN/status')
+      .set('Authorization', 'Bearer admin-token')
+      .send({
+        accountStatus: 'SUSPENDED',
+      });
+
+    expect(selfStatusResponse.status).toBe(400);
+    expect(selfStatusResponse.body.error.code).toBe('SELF_STATUS_CHANGE_FORBIDDEN');
+
+    users = users.map((user) => {
+      if (user.userId === 'USR-ADMIN') {
+        return { ...user, accountStatus: 'SUSPENDED' };
+      }
+
+      if (user.userId === 'USR-ADMIN-LIMITED') {
+        return { ...user, accountStatus: 'SUSPENDED' };
+      }
+
+      return user;
+    });
+
+    const lastAdminResponse = await request(app)
+      .patch('/api/admin/users/USR-ADMIN-2/status')
+      .set('Authorization', 'Bearer admin-token')
+      .send({
+        accountStatus: 'BANNED',
+      });
+
+    expect(lastAdminResponse.status).toBe(400);
+    expect(lastAdminResponse.body.error.code).toBe('LAST_ADMIN_PROTECTED');
   });
 });
