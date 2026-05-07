@@ -2,6 +2,7 @@ const { randomUUID } = require('crypto');
 
 const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
+const Notification = require('../models/Notification');
 const User = require('../models/User');
 const ApiError = require('../utils/ApiError');
 const { sanitizeUser } = require('./user.service');
@@ -66,6 +67,20 @@ const serializeMessage = (message) => {
   };
 };
 
+const buildDisplayName = (user) => {
+  return [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim() || user?.userId || 'Someone';
+};
+
+const buildMessagePreview = (content = '', maxLength = 120) => {
+  const normalizedContent = String(content || '').trim().replace(/\s+/g, ' ');
+
+  if (normalizedContent.length <= maxLength) {
+    return normalizedContent;
+  }
+
+  return `${normalizedContent.slice(0, maxLength - 1)}…`;
+};
+
 const getOrCreateConversation = async (userIdA, userIdB, lastMessageAt = new Date()) => {
   const filter = buildConversationFilter(userIdA, userIdB);
 
@@ -108,15 +123,27 @@ const sendMessage = async (currentUser, { recipientUserId, content }) => {
     throw new ApiError(400, 'You cannot send a message to yourself', 'INVALID_RECIPIENT');
   }
 
-  await getActiveUserByUserId(recipientUserId);
+  const recipientUser = await getActiveUserByUserId(recipientUserId);
 
   const now = new Date();
+  const normalizedContent = content.trim();
   const conversation = await getOrCreateConversation(senderId, recipientUserId, now);
   const message = await Message.create({
     messageId: `MSG-${randomUUID()}`,
     conversationId: conversation.conversationId,
     senderId,
-    content: content.trim(),
+    content: normalizedContent,
+    isRead: false,
+    createdAt: now,
+  });
+
+  await Notification.create({
+    notificationId: `NOTIF-${randomUUID()}`,
+    userId: recipientUser.userId,
+    notificationType: 'MESSAGE',
+    title: `New message from ${buildDisplayName(currentUser)}`,
+    description: buildMessagePreview(normalizedContent),
+    relatedEntityId: message.messageId,
     isRead: false,
     createdAt: now,
   });
@@ -296,7 +323,22 @@ const markMessageAsRead = async (currentUser, messageId) => {
 
   if (message.senderId !== currentUserId && !message.isRead) {
     message.isRead = true;
-    await message.save();
+    await Promise.all([
+      message.save(),
+      Notification.updateMany(
+        {
+          userId: currentUserId,
+          notificationType: 'MESSAGE',
+          relatedEntityId: message.messageId,
+          isRead: false,
+        },
+        {
+          $set: {
+            isRead: true,
+          },
+        }
+      ),
+    ]);
   }
 
   return serializeMessage(message);
