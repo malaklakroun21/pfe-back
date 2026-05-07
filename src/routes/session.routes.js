@@ -16,9 +16,12 @@ router.use(protect);
 router.post('/request', validate(createSessionRequestSchema), sessionController.requestSession);
 // User lists own sessions (teacher/learner filters supported).
 router.get('/', sessionController.listSessions);
+// User explores sessions across the app.
+router.get('/explore', sessionController.listSessionsDirectory);
 // Teacher actions.
 router.patch('/:id/accept', sessionController.acceptSession);
 router.patch('/:id/reject', sessionController.rejectSession);
+router.patch('/:id/cancel', sessionController.cancelSession);
 // Session completion triggers credit transfer.
 router.patch('/:id/complete', validate(completeSessionSchema), sessionController.completeSession);
 

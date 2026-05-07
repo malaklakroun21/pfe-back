@@ -23,6 +23,16 @@ const listSessions = async (req, res, next) => {
   }
 };
 
+// GET /sessions/explore
+const listSessionsDirectory = async (req, res, next) => {
+  try {
+    const sessions = await sessionService.listSessionsDirectory(req.user, req.query);
+    res.status(200).json(new ApiResponse(200, sessions, 'Sessions directory fetched successfully'));
+  } catch (error) {
+    next(error);
+  }
+};
+
 // PATCH /sessions/:id/accept
 const acceptSession = async (req, res, next) => {
   try {
@@ -45,6 +55,17 @@ const rejectSession = async (req, res, next) => {
   }
 };
 
+// PATCH /sessions/:id/cancel
+const cancelSession = async (req, res, next) => {
+  try {
+    const session = await sessionService.cancelSession(req.user, req.params.id);
+    emitSessionUpdate(session);
+    res.status(200).json(new ApiResponse(200, session, 'Session request cancelled successfully'));
+  } catch (error) {
+    next(error);
+  }
+};
+
 // PATCH /sessions/:id/complete
 const completeSession = async (req, res, next) => {
   try {
@@ -59,7 +80,9 @@ const completeSession = async (req, res, next) => {
 module.exports = {
   requestSession,
   listSessions,
+  listSessionsDirectory,
   acceptSession,
   rejectSession,
+  cancelSession,
   completeSession,
 };

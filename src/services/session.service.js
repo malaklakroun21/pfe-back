@@ -152,6 +152,24 @@ const listSessionsForUser = async (currentUser, query = {}) => {
   return withPopulatedParticipants(sessions);
 };
 
+// Lists sessions across the app for discovery views.
+const listSessionsDirectory = async (currentUser, query = {}) => {
+  ensureAuthenticatedUser(currentUser);
+  const status = query.status?.trim().toUpperCase();
+  const filter = {};
+
+  if (status && status !== 'ALL') {
+    if (!SESSION_STATUSES.includes(status)) {
+      throw new ApiError(400, 'Invalid status filter', 'VALIDATION_ERROR');
+    }
+
+    filter.status = status;
+  }
+
+  const sessions = await Session.find(filter).sort({ date: -1, createdAt: -1 }).lean();
+  return withPopulatedParticipants(sessions);
+};
+
 const getSessionDocumentById = async (sessionId, options = {}) => {
   const normalizedSessionId = normalizeSessionId(sessionId);
   const session = await Session.findOne(
@@ -199,6 +217,25 @@ const rejectSession = async (currentUser, sessionId) => {
 
   if (session.status !== 'PENDING') {
     throw new ApiError(409, 'Only pending sessions can be rejected', 'SESSION_INVALID_STATUS');
+  }
+
+  session.status = 'REJECTED';
+  await session.save();
+
+  return session.toObject();
+};
+
+// Learner can cancel their own pending request.
+const cancelSession = async (currentUser, sessionId) => {
+  const user = ensureAuthenticatedUser(currentUser);
+  const session = await getSessionDocumentById(sessionId);
+
+  if (session.learnerId !== user.userId) {
+    throw new ApiError(403, 'Only the learner can cancel this session request', 'FORBIDDEN');
+  }
+
+  if (session.status !== 'PENDING') {
+    throw new ApiError(409, 'Only pending sessions can be cancelled', 'SESSION_INVALID_STATUS');
   }
 
   session.status = 'REJECTED';
@@ -263,7 +300,9 @@ const completeSession = async (currentUser, sessionId, payload = {}) => {
 module.exports = {
   requestSession,
   listSessionsForUser,
+  listSessionsDirectory,
   acceptSession,
   rejectSession,
+  cancelSession,
   completeSession,
 };
