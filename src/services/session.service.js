@@ -244,6 +244,28 @@ const cancelSession = async (currentUser, sessionId) => {
   return session.toObject();
 };
 
+const deleteSession = async (currentUser, sessionId) => {
+  const user = ensureAuthenticatedUser(currentUser);
+  const session = await getSessionDocumentById(sessionId);
+
+  if (session.teacherId !== user.userId && session.learnerId !== user.userId) {
+    throw new ApiError(403, 'Only a session participant can delete this session', 'FORBIDDEN');
+  }
+
+  if (session.status === 'COMPLETED' || session.creditsTransferred) {
+    throw new ApiError(
+      409,
+      'Completed sessions cannot be deleted',
+      'SESSION_INVALID_STATUS'
+    );
+  }
+
+  const deletedSession = session.toObject();
+  await session.deleteOne();
+
+  return deletedSession;
+};
+
 // Completes session + transfers credits atomically in one DB transaction.
 const completeSession = async (currentUser, sessionId, payload = {}) => {
   const user = ensureAuthenticatedUser(currentUser);
@@ -304,5 +326,6 @@ module.exports = {
   acceptSession,
   rejectSession,
   cancelSession,
+  deleteSession,
   completeSession,
 };

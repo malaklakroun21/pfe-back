@@ -71,11 +71,12 @@ const login = async ({ email, password }) => {
 
 const forgotPassword = async (email) => {
   const user = await User.findOne({ email });
+  const genericMessage = 'If that email exists, a reset link has been sent.';
 
   // Return a generic message regardless of whether the email exists.
   // Revealing whether an email is registered is an enumeration vulnerability.
   if (!user) {
-    return { message: 'If that email exists, a reset link has been sent.' };
+    return { message: genericMessage };
   }
 
   const { plainToken, hashedToken, expires } = generateResetToken();
@@ -87,14 +88,22 @@ const forgotPassword = async (email) => {
   const resetUrl = `${process.env.CLIENT_URL}/reset-password?token=${plainToken}`;
 
   try {
-    await sendEmail({
+    const emailResult = await sendEmail({
       to: user.email,
       subject: 'Password Reset Request',
       text: `You requested a password reset. This link expires in 10 minutes:\n\n${resetUrl}\n\nIf you did not request this, ignore this email.`,
     });
+
+    if (emailResult?.delivery === 'console') {
+      return {
+        message:
+          'SMTP is not configured in development. The reset link was generated locally and printed in the backend console.',
+        debugResetUrl: resetUrl,
+      };
+    }
   } catch (emailError) {
     console.error('[EMAIL ERROR]', emailError.message);
-    // Roll back the token so the user can retry — a dangling token with no
+    // Roll back the token so the user can retry - a dangling token with no
     // delivered email would lock them out until it expires.
     user.passwordResetToken = undefined;
     user.passwordResetExpires = undefined;
@@ -102,7 +111,7 @@ const forgotPassword = async (email) => {
     throw new ApiError(500, 'Failed to send reset email. Please try again.', 'EMAIL_SEND_FAILED');
   }
 
-  return { message: 'If that email exists, a reset link has been sent.' };
+  return { message: genericMessage };
 };
 
 const resetPassword = async (plainToken, newPassword) => {
@@ -117,7 +126,7 @@ const resetPassword = async (plainToken, newPassword) => {
     throw new ApiError(400, 'Invalid or expired token', 'INVALID_RESET_TOKEN');
   }
 
-  // Hash manually — the model has no pre-save hook; this mirrors how register() works.
+  // Hash manually - the model has no pre-save hook; this mirrors how register() works.
   user.passwordHash = await hashPassword(newPassword);
   user.passwordResetToken = undefined;
   user.passwordResetExpires = undefined;

@@ -22,6 +22,7 @@ router.get('/explore', sessionController.listSessionsDirectory);
 router.patch('/:id/accept', sessionController.acceptSession);
 router.patch('/:id/reject', sessionController.rejectSession);
 router.patch('/:id/cancel', sessionController.cancelSession);
+router.delete('/:id', sessionController.deleteSession);
 // Session completion triggers credit transfer.
 router.patch('/:id/complete', validate(completeSessionSchema), sessionController.completeSession);
 

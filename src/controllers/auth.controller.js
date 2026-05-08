@@ -34,7 +34,7 @@ const login = async (req, res, next) => {
 const forgotPassword = async (req, res, next) => {
   try {
     const result = await authService.forgotPassword(req.body.email);
-    res.status(200).json(new ApiResponse(200, null, result.message));
+    res.status(200).json(new ApiResponse(200, result, result.message));
   } catch (error) {
     next(error);
   }

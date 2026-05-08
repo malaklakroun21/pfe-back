@@ -58,6 +58,26 @@ const projectSchema = new mongoose.Schema(
       type: [projectMemberSchema],
       default: [],
     },
+    joinRequests: {
+      type: [
+        new mongoose.Schema(
+          {
+            userId: {
+              type: String,
+              required: true,
+              trim: true,
+              ref: 'User',
+            },
+            requestedAt: {
+              type: Date,
+              default: Date.now,
+            },
+          },
+          { _id: false }
+        ),
+      ],
+      default: [],
+    },
   },
   {
     versionKey: false,
@@ -71,5 +91,6 @@ const projectSchema = new mongoose.Schema(
 projectSchema.index({ ownerId: 1, createdAt: -1 });
 projectSchema.index({ status: 1, createdAt: -1 });
 projectSchema.index({ 'members.userId': 1 });
+projectSchema.index({ 'joinRequests.userId': 1 });
 
 module.exports = mongoose.models.Project || mongoose.model('Project', projectSchema);

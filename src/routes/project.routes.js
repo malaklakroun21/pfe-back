@@ -15,6 +15,9 @@ router
   .get(projectController.listProjects);
 
 router.post('/:id/join', projectController.joinProject);
+router.get('/:id/requests', projectController.listJoinRequests);
+router.post('/:id/requests/:userId/approve', projectController.approveJoinRequest);
+router.post('/:id/requests/:userId/reject', projectController.rejectJoinRequest);
 router.post('/:id/leave', projectController.leaveProject);
 router.delete('/:id/members/:userId', projectController.removeProjectMember);
 

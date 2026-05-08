@@ -66,6 +66,16 @@ const cancelSession = async (req, res, next) => {
   }
 };
 
+// DELETE /sessions/:id
+const deleteSession = async (req, res, next) => {
+  try {
+    const session = await sessionService.deleteSession(req.user, req.params.id);
+    res.status(200).json(new ApiResponse(200, session, 'Session deleted successfully'));
+  } catch (error) {
+    next(error);
+  }
+};
+
 // PATCH /sessions/:id/complete
 const completeSession = async (req, res, next) => {
   try {
@@ -84,5 +94,6 @@ module.exports = {
   acceptSession,
   rejectSession,
   cancelSession,
+  deleteSession,
   completeSession,
 };

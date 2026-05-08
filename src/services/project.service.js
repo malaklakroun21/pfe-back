@@ -1,6 +1,7 @@
 const { randomUUID } = require('crypto');
 
 const Project = require('../models/Project');
+const Notification = require('../models/Notification');
 const ApiError = require('../utils/ApiError');
 
 const PROJECT_STATUSES = ['OPEN', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'];
@@ -55,6 +56,12 @@ const getProjectMemberIndex = (project, userId) => {
   const members = project.members || [];
 
   return members.findIndex((member) => member.userId === userId);
+};
+
+const getProjectJoinRequestIndex = (project, userId) => {
+  const requests = project.joinRequests || [];
+
+  return requests.findIndex((request) => request.userId === userId);
 };
 
 const getProjectDocumentById = async (projectId) => {
@@ -194,20 +201,82 @@ const joinProject = async (currentUser, projectId) => {
   if (project.ownerId === user.userId) {
     throw new ApiError(
       400,
-      'Project owner is already part of this project',
-      'OWNER_ALREADY_IN_PROJECT'
+      'Project owner cannot request to join their own project',
+      'OWNER_CANNOT_JOIN_PROJECT'
     );
   }
 
   if (getProjectMemberIndex(project, user.userId) !== -1) {
-    throw new ApiError(409, 'You have already joined this project', 'PROJECT_MEMBER_EXISTS');
+    throw new ApiError(409, 'You are already a member of this project', 'PROJECT_MEMBER_EXISTS');
   }
 
-  project.members.push({
+  if (getProjectJoinRequestIndex(project, user.userId) !== -1) {
+    throw new ApiError(409, 'Join request already pending', 'PROJECT_JOIN_REQUEST_EXISTS');
+  }
+
+  project.joinRequests.push({
     userId: user.userId,
+    requestedAt: new Date(),
+  });
+
+  await project.save();
+
+  await Notification.create({
+    notificationId: `NOTIF-${randomUUID()}`,
+    userId: project.ownerId,
+    notificationType: 'VALIDATION_REQUEST',
+    title: 'New project join request',
+    description: `${user.userId} has requested to join your project ${project.title || project.projectId}.`,
+    relatedEntityId: project.projectId,
+  });
+
+  return sanitizeProject(project);
+};
+
+const approveJoinRequest = async (currentUser, projectId, memberUserId) => {
+  const user = ensureAuthenticatedUser(currentUser);
+  const normalizedMemberUserId = normalizeUserId(memberUserId);
+  const project = await getProjectDocumentById(projectId);
+
+  ensureProjectOwner(project, user.userId);
+
+  const requestIndex = getProjectJoinRequestIndex(project, normalizedMemberUserId);
+
+  if (requestIndex === -1) {
+    throw new ApiError(404, 'Join request not found', 'PROJECT_JOIN_REQUEST_NOT_FOUND');
+  }
+
+  if (getProjectMemberIndex(project, normalizedMemberUserId) !== -1) {
+    project.joinRequests.splice(requestIndex, 1);
+    await project.save();
+    return sanitizeProject(project);
+  }
+
+  project.joinRequests.splice(requestIndex, 1);
+  project.members.push({
+    userId: normalizedMemberUserId,
     joinedAt: new Date(),
   });
 
+  await project.save();
+
+  return sanitizeProject(project);
+};
+
+const rejectJoinRequest = async (currentUser, projectId, memberUserId) => {
+  const user = ensureAuthenticatedUser(currentUser);
+  const normalizedMemberUserId = normalizeUserId(memberUserId);
+  const project = await getProjectDocumentById(projectId);
+
+  ensureProjectOwner(project, user.userId);
+
+  const requestIndex = getProjectJoinRequestIndex(project, normalizedMemberUserId);
+
+  if (requestIndex === -1) {
+    throw new ApiError(404, 'Join request not found', 'PROJECT_JOIN_REQUEST_NOT_FOUND');
+  }
+
+  project.joinRequests.splice(requestIndex, 1);
   await project.save();
 
   return sanitizeProject(project);
@@ -260,6 +329,15 @@ const removeProjectMember = async (currentUser, projectId, memberUserId) => {
   return sanitizeProject(project);
 };
 
+const listJoinRequests = async (currentUser, projectId) => {
+  const user = ensureAuthenticatedUser(currentUser);
+  const project = await getProjectDocumentById(projectId);
+
+  ensureProjectOwner(project, user.userId);
+
+  return sanitizeProject(project).joinRequests || [];
+};
+
 module.exports = {
   createProject,
   listProjects,
@@ -267,6 +345,9 @@ module.exports = {
   updateProject,
   deleteProject,
   joinProject,
+  approveJoinRequest,
+  rejectJoinRequest,
   leaveProject,
   removeProjectMember,
+  listJoinRequests,
 };

@@ -27,7 +27,7 @@ const createTransporter = () => {
  * Sends an email.
  *
  * In development, if SMTP credentials are not configured, the email is printed
- * to the console instead — no config needed to test the forgot-password flow.
+ * to the console instead so the forgot-password flow stays testable.
  *
  * @param {{ to: string, subject: string, text?: string, html?: string }} options
  */
@@ -36,18 +36,23 @@ const sendEmail = async ({ to, subject, text, html }) => {
   const from = process.env.EMAIL_FROM || process.env.EMAIL_USER || 'noreply@skill-exchange.com';
 
   if (!transporter) {
-    // Dev fallback — keeps the app runnable without SMTP credentials
-    console.log('\n─────────── [EMAIL NOT SENT — no SMTP config] ───────────');
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('SMTP transport is not configured.');
+    }
+
+    // Dev fallback keeps the app runnable without SMTP credentials.
+    console.log('\n================ [EMAIL NOT SENT - no SMTP config] ================');
     console.log(`To:      ${to}`);
     console.log(`From:    ${from}`);
     console.log(`Subject: ${subject}`);
-    console.log('─'.repeat(57));
+    console.log('='.repeat(69));
     console.log(text || html);
-    console.log('─'.repeat(57) + '\n');
-    return;
+    console.log('='.repeat(69) + '\n');
+    return { delivery: 'console' };
   }
 
   await transporter.sendMail({ from, to, subject, text, html });
+  return { delivery: 'smtp' };
 };
 
 module.exports = sendEmail;

@@ -19,6 +19,15 @@ const listProjects = async (req, res, next) => {
   }
 };
 
+const listJoinRequests = async (req, res, next) => {
+  try {
+    const requests = await projectService.listJoinRequests(req.user, req.params.id);
+    res.status(200).json(new ApiResponse(200, requests, 'Join requests fetched successfully'));
+  } catch (error) {
+    next(error);
+  }
+};
+
 const getProjectById = async (req, res, next) => {
   try {
     const project = await projectService.getProjectById(req.params.id);
@@ -49,7 +58,33 @@ const deleteProject = async (req, res, next) => {
 const joinProject = async (req, res, next) => {
   try {
     const project = await projectService.joinProject(req.user, req.params.id);
-    res.status(200).json(new ApiResponse(200, project, 'Joined project successfully'));
+    res.status(200).json(new ApiResponse(200, project, 'Join request submitted successfully'));
+  } catch (error) {
+    next(error);
+  }
+};
+
+const approveJoinRequest = async (req, res, next) => {
+  try {
+    const project = await projectService.approveJoinRequest(
+      req.user,
+      req.params.id,
+      req.params.userId
+    );
+    res.status(200).json(new ApiResponse(200, project, 'Join request approved successfully'));
+  } catch (error) {
+    next(error);
+  }
+};
+
+const rejectJoinRequest = async (req, res, next) => {
+  try {
+    const project = await projectService.rejectJoinRequest(
+      req.user,
+      req.params.id,
+      req.params.userId
+    );
+    res.status(200).json(new ApiResponse(200, project, 'Join request rejected successfully'));
   } catch (error) {
     next(error);
   }
@@ -80,10 +115,13 @@ const removeProjectMember = async (req, res, next) => {
 module.exports = {
   createProject,
   listProjects,
+  listJoinRequests,
   getProjectById,
   updateProject,
   deleteProject,
   joinProject,
+  approveJoinRequest,
+  rejectJoinRequest,
   leaveProject,
   removeProjectMember,
 };
