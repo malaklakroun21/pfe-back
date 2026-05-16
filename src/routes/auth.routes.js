@@ -5,6 +5,7 @@ const authController = require('../controllers/auth.controller');
 const validate = require('../middleware/validate.middleware');
 const {
   registerSchema,
+  registerAdminSchema,
   loginSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
@@ -31,6 +32,7 @@ const resetLimiter = process.env.NODE_ENV === 'production'
   : (req, res, next) => next();
 
 router.post('/register', validate(registerSchema), authController.register);
+router.post('/register-admin', validate(registerAdminSchema), authController.registerAdmin);
 router.post('/login', validate(loginSchema), authController.login);
 router.post('/forgot-password', resetLimiter, validate(forgotPasswordSchema), authController.forgotPassword);
 router.post('/reset-password/:token', validate(resetPasswordSchema), authController.resetPassword);

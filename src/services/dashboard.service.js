@@ -559,12 +559,20 @@ const getValidationData = async (currentUser) => {
           validationScore: 0,
         }));
 
-  const skillOptions = derivedSkills.map((skill) => ({
-    id: buildSkillKey(skill.skillName),
-    skillId: skill.skillId || '',
-    label: skill.skillName,
-    description: `${toTitleCase(skill.proficiencyLevel)}${skill.categoryName ? ` • ${skill.categoryName}` : ''}`,
-  }));
+  const skillOptions = derivedSkills.map((skill) => {
+    const evidenceCount = skill.skillId ? evidenceCountMap.get(skill.skillId) || 0 : 0;
+    const activeRequest = skill.skillId ? requestMap.get(skill.skillId) : null;
+
+    return {
+      id: buildSkillKey(skill.skillName),
+      skillId: skill.skillId || '',
+      label: skill.skillName,
+      description: `${toTitleCase(skill.proficiencyLevel)}${skill.categoryName ? ` - ${skill.categoryName}` : ''}`,
+      evidenceCount,
+      hasExistingEvidence: evidenceCount > 0,
+      requestStatus: activeRequest?.requestStatus || '',
+    };
+  });
 
   const mentorOptions = mentorDirectory.map((mentor) => ({
     id: mentor.id,

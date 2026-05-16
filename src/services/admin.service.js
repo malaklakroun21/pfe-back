@@ -156,7 +156,11 @@ const buildUserSearchFilter = (query = {}) => {
   const filter = {};
 
   if (query.role?.trim()) {
-    filter.role = normalizeRole(query.role.trim());
+    const normalizedRole = normalizeRole(query.role.trim());
+    filter.role =
+      normalizedRole.toLowerCase() === 'admin'
+        ? { $in: ADMIN_ROLE_QUERY_VALUES }
+        : normalizedRole;
   }
 
   if (query.accountStatus?.trim()) {

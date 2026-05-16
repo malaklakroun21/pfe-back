@@ -2,12 +2,15 @@ const { randomUUID } = require('crypto');
 const mongoose = require('mongoose');
 
 const User = require('../models/User');
+const Admin = require('../models/Admin');
+const AuditLog = require('../models/AuditLog');
 const ApiError = require('../utils/ApiError');
 const { hashPassword, comparePassword } = require('../utils/hash');
 const { signAccessToken } = require('../utils/jwt');
 const { generateResetToken, hashToken } = require('../utils/token');
 const { sanitizeUser } = require('./user.service');
 const sendEmail = require('../utils/email');
+const { DEFAULT_ADMIN_PERMISSIONS } = require('../constants/admin');
 
 const INITIAL_TIME_CREDITS = '10';
 
@@ -135,8 +138,69 @@ const resetPassword = async (plainToken, newPassword) => {
   return buildAuthPayload(user);
 };
 
+const registerAdmin = async (payload, options = {}) => {
+  const bootstrapSecret = String(options.bootstrapSecret || '').trim();
+  const expectedSecret = String(process.env.ADMIN_BOOTSTRAP_SECRET || '').trim();
+
+  if (!expectedSecret || bootstrapSecret !== expectedSecret) {
+    throw new ApiError(403, 'Invalid admin bootstrap secret', 'INVALID_ADMIN_BOOTSTRAP_SECRET');
+  }
+
+  const existingUser = await User.findOne({ email: payload.email });
+
+  if (existingUser) {
+    throw new ApiError(409, 'Email already in use', 'EMAIL_ALREADY_EXISTS');
+  }
+
+  const user = await User.create({
+    userId: `USR-${randomUUID()}`,
+    email: payload.email,
+    passwordHash: await hashPassword(payload.password),
+    firstName: payload.firstName,
+    lastName: payload.lastName,
+    profilePicture: payload.profilePicture,
+    bio: payload.bio,
+    countryId: payload.countryId,
+    cityId: payload.cityId,
+    languages: payload.languages || [],
+    role: 'ADMIN',
+    accountStatus: 'ACTIVE',
+    emailVerified: true,
+    timeCredits: mongoose.Types.Decimal128.fromString(INITIAL_TIME_CREDITS),
+  });
+
+  await Admin.create({
+    userId: user.userId,
+    assignedSkillCategoryId: '',
+    skillName: '',
+    permissions: payload.permissions?.length ? payload.permissions : DEFAULT_ADMIN_PERMISSIONS,
+    assignedDate: new Date(),
+    lastActiveDate: new Date(),
+  });
+
+  await AuditLog.create({
+    auditId: `AUD-${randomUUID()}`,
+    adminUserId: user.userId,
+    userId: user.userId,
+    actionType: 'CREATE_ADMIN',
+    targetEntityId: user.userId,
+    targetEntityType: 'User',
+    details: {
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+    },
+    reason: 'Admin bootstrap registration',
+    timestamp: new Date(),
+    ipAddress: String(options.ipAddress || '').trim(),
+  });
+
+  return buildAuthPayload(user);
+};
+
 module.exports = {
   register,
+  registerAdmin,
   login,
   forgotPassword,
   resetPassword,
