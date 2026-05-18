@@ -1,5 +1,10 @@
 const express = require('express');
 const request = require('supertest');
+const { createMongooseQuery } = require('../helpers/mongoose-query.mock');
+
+jest.mock('../../src/services/validation.service', () => ({
+  ensureTeacherCanTeachSkill: jest.fn().mockResolvedValue(undefined),
+}));
 
 jest.mock('../../src/middleware/auth.middleware', () => {
   return (req, res, next) => {
@@ -123,7 +128,12 @@ describe('session + credit + rating negative flows', () => {
         firstName: 'Teacher',
         lastName: 'One',
         profilePicture: '',
+        offeredSkills: ['Node.js', 'MongoDB'],
         timeCredits: 0,
+        xpTotal: 0,
+        level: 1,
+        levelTitle: 'Seed',
+        xpHistory: [],
       },
       {
         userId: 'USR-OTHER',
@@ -153,11 +163,37 @@ describe('session + credit + rating negative flows', () => {
     };
     mongoose.startSession.mockResolvedValue(mockMongoSession);
 
-    User.findOne.mockImplementation(async (filter) => {
+    User.findOne.mockImplementation((filter = {}) => {
+      if (filter['xpHistory.sessionId']) {
+        const owner = users.find((candidate) => candidate.userId === filter.userId);
+        if (!owner) {
+          return createMongooseQuery(null);
+        }
+
+        const alreadyAwarded = (owner.xpHistory || []).some(
+          (entry) =>
+            entry.sessionId === filter['xpHistory.sessionId'] &&
+            entry.source === filter['xpHistory.source']
+        );
+
+        return createMongooseQuery(alreadyAwarded ? asDoc(owner, 'users') : null);
+      }
+
       const user = users.find((candidate) =>
-        Object.entries(filter).every(([key, value]) => candidate[key] === value)
+        Object.entries(filter).every(([key, value]) => {
+          if (value && typeof value === 'object') {
+            return true;
+          }
+
+          return candidate[key] === value;
+        })
       );
-      return user ? asDoc(user, 'users') : null;
+
+      if (!user) {
+        return createMongooseQuery(null);
+      }
+
+      return createMongooseQuery(asDoc(user, 'users'));
     });
 
     User.find.mockImplementation((filter) => {
@@ -187,6 +223,7 @@ describe('session + credit + rating negative flows', () => {
       const created = {
         ...payload,
         creditsTransferred: false,
+        xpAwarded: false,
         completedAt: null,
         createdAt: new Date().toISOString(),
       };

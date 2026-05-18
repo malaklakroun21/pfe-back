@@ -104,6 +104,38 @@ const userSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.Decimal128,
     default: () => mongoose.Types.Decimal128.fromString('0'),
   },
+  // Global reputation XP (never spendable; separate from credits).
+  xpTotal: {
+    type: Number,
+    default: 0,
+    min: 0,
+  },
+  level: {
+    type: Number,
+    default: 1,
+    min: 1,
+    max: 6,
+  },
+  levelTitle: {
+    type: String,
+    default: 'Seed',
+    trim: true,
+  },
+  xpHistory: {
+    type: [
+      {
+        amount: { type: Number, required: true, min: 1 },
+        source: { type: String, required: true, trim: true },
+        sessionId: { type: String, trim: true, default: null },
+        description: { type: String, trim: true, default: '' },
+        createdAt: { type: Date, default: Date.now },
+      },
+    ],
+    default: [],
+  },
+  lastXpGainAt: {
+    type: Date,
+  },
   passwordResetToken: { 
     type: String, select: false 
   },

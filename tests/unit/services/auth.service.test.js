@@ -3,6 +3,10 @@ jest.mock('../../../src/models/User', () => ({
   create: jest.fn(),
 }));
 
+jest.mock('../../../src/models/SystemSettings', () => ({
+  findOne: jest.fn().mockResolvedValue(null),
+}));
+
 jest.mock('../../../src/utils/hash', () => ({
   hashPassword: jest.fn(),
   comparePassword: jest.fn(),

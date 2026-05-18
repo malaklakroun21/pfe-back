@@ -14,6 +14,7 @@ const SkillEvidence = require('../models/SkillEvidence');
 const User = require('../models/User');
 const ValidationRequest = require('../models/ValidationRequest');
 const { getMentorValidationOverview } = require('./validation.service');
+const { formatXpProfile } = require('./xp.service');
 const { ensureDefaultSkillCategory } = require('../utils/skillCategory.util');
 
 const MENTOR_ROLES = new Set(['MENTOR', 'ADMIN']);
@@ -297,8 +298,25 @@ const buildProfileReviews = async (userId) => {
   }));
 };
 
+const buildXpStatCard = (xpProfile) => {
+  const xpTotal = xpProfile?.xpTotal ?? 0;
+  const level = xpProfile?.level ?? 1;
+  const levelTitle = xpProfile?.levelTitle ?? 'Seed';
+
+  return {
+    id: 'xp',
+    label: 'Your level',
+    value: `Lv${level} · ${levelTitle}`,
+    note: xpProfile?.isMaxLevel
+      ? `${xpTotal.toLocaleString()} XP · Oasis reached`
+      : `${xpTotal.toLocaleString()} XP · ${xpProfile?.progressPercent ?? 0}% to next level`,
+    icon: 'xp',
+  };
+};
+
 const getOverview = async (currentUser) => {
   const user = ensureAuthenticatedUser(currentUser);
+  const xp = formatXpProfile(user, { includeHistory: true, historyLimit: 5 });
   const [sessions, userRatingMap, ownSkillMap, mentorDirectory] = await Promise.all([
     Session.find({
       $or: [{ teacherId: user.userId }, { learnerId: user.userId }],
@@ -363,6 +381,7 @@ const getOverview = async (currentUser) => {
     },
     role: isMentorUser(user) ? 'mentor' : 'learner',
     creditsAvailable: readDecimalValue(user.timeCredits),
+    xp,
     upcomingSessions,
     recommendedSkills,
   };
@@ -377,6 +396,7 @@ const getOverview = async (currentUser) => {
       pendingValidationRequests: validationOverview.recentPending,
       recentValidationActivity: validationOverview.recentActivity,
       stats: [
+        buildXpStatCard(xp),
         {
           id: 'pending-validations',
           label: 'Pending reviews',
@@ -415,6 +435,7 @@ const getOverview = async (currentUser) => {
   return {
     ...baseOverview,
     stats: [
+      buildXpStatCard(xp),
       {
         id: 'credits',
         label: 'Credits Balance',

@@ -5,6 +5,7 @@ const Session = require('../models/Session');
 const User = require('../models/User');
 const ApiError = require('../utils/ApiError');
 const creditService = require('./credit.service');
+const xpService = require('./xp.service');
 const { ensureTeacherCanTeachSkill } = require('./validation.service');
 
 const SESSION_STATUSES = ['PENDING', 'ACCEPTED', 'REJECTED', 'COMPLETED'];
@@ -283,7 +284,7 @@ const completeSession = async (currentUser, sessionId, payload = {}) => {
         throw new ApiError(403, 'Only the teacher can complete this session', 'FORBIDDEN');
       }
 
-      if (session.status === 'COMPLETED' || session.creditsTransferred) {
+      if (session.status === 'COMPLETED' || session.creditsTransferred || session.xpAwarded) {
         throw new ApiError(409, 'Session has already been completed', 'SESSION_ALREADY_COMPLETED');
       }
 
@@ -310,6 +311,19 @@ const completeSession = async (currentUser, sessionId, payload = {}) => {
       session.status = 'COMPLETED';
       session.creditsTransferred = true;
       session.completedAt = new Date();
+
+      // Teacher earns XP from credits taught: 1 credit = 10 XP (MVP rule, once per session).
+      if (!session.xpAwarded) {
+        await xpService.awardSessionCompletionXP({
+          teacherId: session.teacherId,
+          creditsEarned: chargedCredits,
+          sessionId: session.sessionId,
+          skill: session.skill,
+          mongoSession,
+        });
+        session.xpAwarded = true;
+      }
+
       await session.save({ session: mongoSession });
 
       completedSession = session.toObject();

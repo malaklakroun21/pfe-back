@@ -472,7 +472,8 @@ const updateUserProfile = async (userId, updates = {}) => {
     }
   }
 
-  applyProfileUpdates(currentUser, updates);
+  const { email: _ignoredEmail, role: _ignoredRole, ...profileUpdates } = updates;
+  applyProfileUpdates(currentUser, profileUpdates);
   await applyLocationUpdates(currentUser, updates);
   await applyResumeUpdates(currentUser, updates);
   await currentUser.save();

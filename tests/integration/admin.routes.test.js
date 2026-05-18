@@ -46,6 +46,23 @@ jest.mock('../../src/models/Report', () => ({
   find: jest.fn(),
   findOne: jest.fn(),
   countDocuments: jest.fn(),
+  distinct: jest.fn(),
+}));
+
+jest.mock('../../src/models/MentorApplication', () => ({
+  countDocuments: jest.fn(),
+}));
+
+jest.mock('../../src/models/CreditBalance', () => ({
+  aggregate: jest.fn(),
+}));
+
+jest.mock('../../src/models/CreditTransaction', () => ({
+  countDocuments: jest.fn(),
+}));
+
+jest.mock('../../src/models/Session', () => ({
+  countDocuments: jest.fn(),
 }));
 
 jest.mock('../../src/models/SystemSettings', () => {
@@ -65,6 +82,10 @@ const Admin = require('../../src/models/Admin');
 const AuditLog = require('../../src/models/AuditLog');
 const Report = require('../../src/models/Report');
 const SystemSettings = require('../../src/models/SystemSettings');
+const MentorApplication = require('../../src/models/MentorApplication');
+const CreditBalance = require('../../src/models/CreditBalance');
+const CreditTransaction = require('../../src/models/CreditTransaction');
+const Session = require('../../src/models/Session');
 const adminRoutes = require('../../src/routes/admin');
 const errorHandler = require('../../src/middleware/error.middleware');
 
@@ -149,8 +170,10 @@ const createQueryChain = (items) => {
       return chain;
     }),
     limit: jest.fn().mockImplementation((count) => {
-      return Promise.resolve(currentItems.slice(0, count));
+      currentItems = currentItems.slice(0, count);
+      return chain;
     }),
+    lean: jest.fn().mockImplementation(() => Promise.resolve(currentItems)),
     then: (resolve, reject) => Promise.resolve(currentItems).then(resolve, reject),
     catch: (reject) => Promise.resolve(currentItems).catch(reject),
   };
@@ -449,6 +472,12 @@ describe('admin routes RBAC, moderation, and audit flows', () => {
       const setting = settings.find((candidate) => matchesFilter(candidate, filter));
       return setting ? asDocument('settings', setting) : null;
     });
+
+    MentorApplication.countDocuments.mockResolvedValue(0);
+    CreditBalance.aggregate.mockResolvedValue([]);
+    CreditTransaction.countDocuments.mockResolvedValue(0);
+    Session.countDocuments.mockResolvedValue(0);
+    Report.distinct.mockResolvedValue(['USR-USER-2']);
   });
 
   it('blocks normal user from admin endpoints', async () => {

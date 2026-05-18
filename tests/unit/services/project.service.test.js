@@ -5,6 +5,10 @@ jest.mock('../../../src/models/Project', () => ({
   findOne: jest.fn(),
 }));
 
+jest.mock('../../../src/models/Notification', () => ({
+  create: jest.fn().mockResolvedValue({}),
+}));
+
 const createProjectDoc = (overrides = {}) => {
   return {
     projectId: 'PRJ-123',
@@ -14,6 +18,7 @@ const createProjectDoc = (overrides = {}) => {
     requiredSkill: 'React',
     status: 'OPEN',
     members: [],
+    joinRequests: [],
     save: jest.fn().mockResolvedValue(undefined),
     deleteOne: jest.fn().mockResolvedValue(undefined),
     toObject() {
@@ -25,6 +30,7 @@ const createProjectDoc = (overrides = {}) => {
         requiredSkill: this.requiredSkill,
         status: this.status,
         members: this.members,
+        joinRequests: this.joinRequests,
       };
     },
     ...overrides,
@@ -37,17 +43,17 @@ describe('project.service membership', () => {
   });
 
   describe('joinProject', () => {
-    it('adds the authenticated user to project members', async () => {
+    it('creates a pending join request for the authenticated user', async () => {
       const projectDoc = createProjectDoc();
       Project.findOne.mockResolvedValue(projectDoc);
 
       const result = await projectService.joinProject({ userId: 'USR-member' }, 'PRJ-123');
 
       expect(Project.findOne).toHaveBeenCalledWith({ projectId: 'PRJ-123' });
-      expect(projectDoc.members).toHaveLength(1);
-      expect(projectDoc.members[0].userId).toBe('USR-member');
+      expect(projectDoc.joinRequests).toHaveLength(1);
+      expect(projectDoc.joinRequests[0].userId).toBe('USR-member');
       expect(projectDoc.save).toHaveBeenCalled();
-      expect(result.members[0].userId).toBe('USR-member');
+      expect(result.joinRequests[0].userId).toBe('USR-member');
     });
   });
 
