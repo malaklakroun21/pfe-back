@@ -4,14 +4,14 @@ const Joi = require('joi');
 const createSessionRequestSchema = Joi.object({
   teacherId: Joi.string().trim().required(),
   skill: Joi.string().trim().min(2).max(120).required(),
-  duration: Joi.number().positive().required(),
+  duration: Joi.number().positive().max(4).required(),
   date: Joi.date().iso().required(),
   message: Joi.string().trim().allow('').max(1000).optional(),
 });
 
 // Payload contract for PATCH /sessions/:id/complete.
 const completeSessionSchema = Joi.object({
-  actualDuration: Joi.number().positive().optional(),
+  actualDuration: Joi.number().positive().max(4).optional(),
 });
 
 module.exports = {

@@ -35,6 +35,7 @@ const sessionSchema = new mongoose.Schema(
       type: Number,
       required: true,
       min: 1,
+      max: 4,
     },
     date: {
       type: Date,
@@ -68,6 +69,32 @@ const sessionSchema = new mongoose.Schema(
     xpAwarded: {
       type: Boolean,
       default: false,
+    },
+    // Dual confirmation — credits settle only when both are true.
+    teacherConfirmed: {
+      type: Boolean,
+      default: false,
+    },
+    learnerConfirmed: {
+      type: Boolean,
+      default: false,
+    },
+    teacherConfirmedAt: {
+      type: Date,
+    },
+    learnerConfirmedAt: {
+      type: Date,
+    },
+    endorsementsUnlocked: {
+      type: Boolean,
+      default: false,
+    },
+    creditBreakdown: {
+      hours: { type: Number },
+      skillTier: { type: String },
+      tierMultiplier: { type: Number },
+      trustModifier: { type: Number },
+      calculatedCredits: { type: Number },
     },
     completedAt: {
       type: Date,

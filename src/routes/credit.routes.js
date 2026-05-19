@@ -7,7 +7,7 @@ const router = express.Router();
 
 router.use(protect);
 
-// Returns transactions where user is sender or receiver.
+router.get('/me', creditController.getMyCredits);
 router.get('/history', creditController.getCreditHistory);
 
 module.exports = router;

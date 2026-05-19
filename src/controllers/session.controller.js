@@ -76,7 +76,19 @@ const deleteSession = async (req, res, next) => {
   }
 };
 
-// PATCH /sessions/:id/complete
+// POST /sessions/confirm — dual confirmation flow.
+const confirmSession = async (req, res, next) => {
+  try {
+    const sessionId = req.body.sessionId || req.params.id;
+    const session = await sessionService.confirmSessionCompletion(req.user, sessionId, req.body);
+    emitSessionUpdate(session);
+    res.status(200).json(new ApiResponse(200, session, 'Session confirmation recorded successfully'));
+  } catch (error) {
+    next(error);
+  }
+};
+
+// PATCH /sessions/:id/complete — backward compatible (teacher confirm).
 const completeSession = async (req, res, next) => {
   try {
     const session = await sessionService.completeSession(req.user, req.params.id, req.body);
@@ -95,5 +107,6 @@ module.exports = {
   rejectSession,
   cancelSession,
   deleteSession,
+  confirmSession,
   completeSession,
 };

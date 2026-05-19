@@ -56,6 +56,54 @@ const skillSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+    // Per-skill trust mechanics (P/E formula).
+    skillTier: {
+      type: String,
+      enum: ['STARTER', 'BEGINNER', 'INTERMEDIATE', 'ADVANCED', 'EXPERT'],
+      uppercase: true,
+      default: 'STARTER',
+    },
+    mentorValidated: {
+      type: Boolean,
+      default: false,
+    },
+    linkedPlatforms: {
+      type: [String],
+      default: [],
+    },
+    portfolioScore: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 100,
+    },
+    endorsementScore: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 100,
+    },
+    endorsementsCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    trustScore: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 100,
+    },
+    trustBadge: {
+      type: String,
+      default: 'Unverified',
+      trim: true,
+    },
+    trustModifier: {
+      type: Number,
+      default: 1.0,
+      min: 1.0,
+    },
     validatedBy: {
       type: String,
       trim: true,

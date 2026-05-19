@@ -1,6 +1,9 @@
 const express = require('express');
 const request = require('supertest');
-const { createMongooseQuery } = require('../helpers/mongoose-query.mock');
+const {
+  createMongooseQuery,
+  createCreditTransactionFindMock,
+} = require('../helpers/mongoose-query.mock');
 
 jest.mock('../../src/middleware/auth.middleware', () => {
   return (req, res, next) => {
@@ -57,6 +60,15 @@ jest.mock('../../src/models/Rating', () => ({
   find: jest.fn(),
 }));
 
+jest.mock('../../src/models/Skill', () => ({
+  findOne: jest.fn(),
+}));
+
+jest.mock('../../src/services/trustScore.service', () => ({
+  recalculateSkillTrust: jest.fn().mockResolvedValue({}),
+  recalculateSkillTrustById: jest.fn().mockResolvedValue({}),
+}));
+
 jest.mock('mongoose', () => {
   const actualMongoose = jest.requireActual('mongoose');
   return {
@@ -70,6 +82,7 @@ const User = require('../../src/models/User');
 const Session = require('../../src/models/Session');
 const CreditTransaction = require('../../src/models/CreditTransaction');
 const Rating = require('../../src/models/Rating');
+const Skill = require('../../src/models/Skill');
 
 const sessionRoutes = require('../../src/routes/session.routes');
 const creditRoutes = require('../../src/routes/credit.routes');
@@ -274,11 +287,7 @@ describe('session + credit + rating flow', () => {
       return [{ ...payload, toObject: () => ({ ...payload }) }];
     });
 
-    CreditTransaction.find.mockImplementation((filter) => {
-      const userId = filter.$or[0].fromUser;
-      const result = transactions.filter((item) => item.fromUser === userId || item.toUser === userId);
-      return createQueryChain(result);
-    });
+    CreditTransaction.find.mockImplementation(createCreditTransactionFindMock(transactions));
 
     Rating.findOne.mockImplementation(async (filter) => {
       return (
@@ -302,6 +311,25 @@ describe('session + credit + rating flow', () => {
     Rating.find.mockImplementation((filter) => {
       const result = ratings.filter((item) => item.toUser === filter.toUser);
       return createQueryChain(result);
+    });
+
+    Skill.findOne.mockImplementation(async (filter = {}) => {
+      if (filter.userId === 'USR-TEACHER') {
+        return {
+          skillId: 'SKILL-TEACHER-NODE',
+          userId: 'USR-TEACHER',
+          skillName: filter.skillName || 'Node.js',
+          skillTier: 'STARTER',
+          trustModifier: 1,
+          trustBadge: 'Unverified',
+          save: jest.fn().mockResolvedValue(undefined),
+          toObject() {
+            return { ...this };
+          },
+        };
+      }
+
+      return null;
     });
   });
 
@@ -337,18 +365,29 @@ describe('session + credit + rating flow', () => {
     expect(acceptResponse.status).toBe(200);
     expect(acceptResponse.body.data.status).toBe('ACCEPTED');
 
-    const completeResponse = await request(app)
-      .patch(`/api/v1/sessions/${sessionId}/complete`)
+    const teacherConfirmResponse = await request(app)
+      .post('/api/v1/sessions/confirm')
       .set('Authorization', 'Bearer teacher-token')
       .send({
+        sessionId,
         actualDuration: 2.5,
       });
 
-    expect(completeResponse.status).toBe(200);
-    expect(completeResponse.body.data.status).toBe('COMPLETED');
-    expect(completeResponse.body.data.actualDuration).toBe(2.5);
-    expect(completeResponse.body.data.chargedCredits).toBe(2);
-    expect(completeResponse.body.data.creditsTransferred).toBe(true);
+    expect(teacherConfirmResponse.status).toBe(200);
+    expect(teacherConfirmResponse.body.data.teacherConfirmed).toBe(true);
+    expect(teacherConfirmResponse.body.data.status).toBe('ACCEPTED');
+
+    const learnerConfirmResponse = await request(app)
+      .post('/api/v1/sessions/confirm')
+      .set('Authorization', 'Bearer learner-token')
+      .send({ sessionId });
+
+    expect(learnerConfirmResponse.status).toBe(200);
+    expect(learnerConfirmResponse.body.data.status).toBe('COMPLETED');
+    expect(learnerConfirmResponse.body.data.actualDuration).toBe(2.5);
+    expect(learnerConfirmResponse.body.data.chargedCredits).toBe(2);
+    expect(learnerConfirmResponse.body.data.creditsTransferred).toBe(true);
+    expect(learnerConfirmResponse.body.data.endorsementsUnlocked).toBe(true);
 
     const learnerAfter = users.find((user) => user.userId === 'USR-LEARNER');
     const teacherAfter = users.find((user) => user.userId === 'USR-TEACHER');
@@ -364,11 +403,12 @@ describe('session + credit + rating flow', () => {
     });
     expect(transactions).toHaveLength(1);
 
-    const secondCompleteResponse = await request(app)
-      .patch(`/api/v1/sessions/${sessionId}/complete`)
-      .set('Authorization', 'Bearer teacher-token');
+    const duplicateConfirmResponse = await request(app)
+      .post('/api/v1/sessions/confirm')
+      .set('Authorization', 'Bearer teacher-token')
+      .send({ sessionId });
 
-    expect(secondCompleteResponse.status).toBe(409);
+    expect(duplicateConfirmResponse.status).toBe(409);
 
     const historyResponse = await request(app)
       .get('/api/v1/credits/history')
@@ -437,12 +477,15 @@ describe('session + credit + rating flow', () => {
 
     expect(acceptResponse.status).toBe(200);
 
-    const completeResponse = await request(app)
-      .patch(`/api/v1/sessions/${sessionId}/complete`)
+    await request(app)
+      .post('/api/v1/sessions/confirm')
       .set('Authorization', 'Bearer teacher-token')
-      .send({
-        actualDuration: 1.5,
-      });
+      .send({ sessionId, actualDuration: 1.5 });
+
+    const completeResponse = await request(app)
+      .post('/api/v1/sessions/confirm')
+      .set('Authorization', 'Bearer learner-token')
+      .send({ sessionId });
 
     expect(completeResponse.status).toBe(200);
     expect(completeResponse.body.data.actualDuration).toBe(1.5);

@@ -1,9 +1,21 @@
 const express = require('express');
 const request = require('supertest');
-const { createMongooseQuery } = require('../helpers/mongoose-query.mock');
+const {
+  createMongooseQuery,
+  createCreditTransactionFindMock,
+} = require('../helpers/mongoose-query.mock');
 
 jest.mock('../../src/services/validation.service', () => ({
   ensureTeacherCanTeachSkill: jest.fn().mockResolvedValue(undefined),
+}));
+
+jest.mock('../../src/models/Skill', () => ({
+  findOne: jest.fn(),
+}));
+
+jest.mock('../../src/services/trustScore.service', () => ({
+  recalculateSkillTrust: jest.fn().mockResolvedValue({}),
+  recalculateSkillTrustById: jest.fn().mockResolvedValue({}),
 }));
 
 jest.mock('../../src/middleware/auth.middleware', () => {
@@ -70,6 +82,7 @@ const User = require('../../src/models/User');
 const Session = require('../../src/models/Session');
 const CreditTransaction = require('../../src/models/CreditTransaction');
 const Rating = require('../../src/models/Rating');
+const Skill = require('../../src/models/Skill');
 
 const sessionRoutes = require('../../src/routes/session.routes');
 const ratingRoutes = require('../../src/routes/rating.routes');
@@ -92,6 +105,7 @@ describe('session + credit + rating negative flows', () => {
 
   let users;
   let sessions;
+  let transactions;
   let ratings;
 
   const asDoc = (entity, collectionName) => {
@@ -155,6 +169,7 @@ describe('session + credit + rating negative flows', () => {
       },
     ];
     sessions = [];
+    transactions = [];
     ratings = [];
 
     const mockMongoSession = {
@@ -245,8 +260,15 @@ describe('session + credit + rating negative flows', () => {
     });
 
     CreditTransaction.create.mockImplementation(async ([payload]) => {
+      transactions.push({
+        ...payload,
+        createdAt: new Date().toISOString(),
+        type: payload.type || 'TRANSFER',
+      });
       return [{ ...payload, toObject: () => ({ ...payload }) }];
     });
+
+    CreditTransaction.find.mockImplementation(createCreditTransactionFindMock(transactions));
 
     Rating.findOne.mockImplementation(async (filter) => {
       return (
@@ -263,6 +285,19 @@ describe('session + credit + rating negative flows', () => {
 
     Rating.find.mockImplementation((filter) => {
       return createQueryChain(ratings.filter((item) => item.toUser === filter.toUser));
+    });
+
+    Skill.findOne.mockResolvedValue({
+      skillId: 'SKILL-TEACHER',
+      userId: 'USR-TEACHER',
+      skillName: 'Node.js',
+      skillTier: 'STARTER',
+      trustModifier: 1,
+      trustBadge: 'Unverified',
+      save: jest.fn().mockResolvedValue(undefined),
+      toObject() {
+        return { ...this };
+      },
     });
   });
 
@@ -327,9 +362,15 @@ describe('session + credit + rating negative flows', () => {
       .set('Authorization', 'Bearer teacher-token');
     expect(acceptRes.status).toBe(200);
 
+    await request(app)
+      .post('/api/v1/sessions/confirm')
+      .set('Authorization', 'Bearer teacher-token')
+      .send({ sessionId });
+
     const completeRes = await request(app)
-      .patch(`/api/v1/sessions/${sessionId}/complete`)
-      .set('Authorization', 'Bearer teacher-token');
+      .post('/api/v1/sessions/confirm')
+      .set('Authorization', 'Bearer learner-token')
+      .send({ sessionId });
 
     expect(completeRes.status).toBe(400);
     expect(completeRes.body.error.code).toBe('INSUFFICIENT_CREDITS');

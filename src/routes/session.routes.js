@@ -7,6 +7,7 @@ const {
   createSessionRequestSchema,
   completeSessionSchema,
 } = require('../validators/session.validator');
+const { confirmSessionSchema } = require('../validators/mechanics.validator');
 
 const router = express.Router();
 
@@ -14,7 +15,7 @@ router.use(protect);
 
 // Learner creates a session request.
 router.post('/request', validate(createSessionRequestSchema), sessionController.requestSession);
-// User lists own sessions (teacher/learner filters supported).
+router.post('/confirm', validate(confirmSessionSchema), sessionController.confirmSession);
 router.get('/', sessionController.listSessions);
 // User explores sessions across the app.
 router.get('/explore', sessionController.listSessionsDirectory);

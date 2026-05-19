@@ -6,12 +6,14 @@ const User = require('../models/User');
 const ApiError = require('../utils/ApiError');
 const creditService = require('./credit.service');
 const xpService = require('./xp.service');
+const skillService = require('./skill.service');
+const trustScoreService = require('./trustScore.service');
 const { ensureTeacherCanTeachSkill } = require('./validation.service');
+const { MAX_SESSION_HOURS, SKILL_TIER_MULTIPLIERS } = require('../constants/mechanics');
 
 const SESSION_STATUSES = ['PENDING', 'ACCEPTED', 'REJECTED', 'COMPLETED'];
 const SESSION_ROLES = ['TEACHER', 'LEARNER'];
 
-// Guards every service action that depends on req.user.
 const ensureAuthenticatedUser = (user) => {
   if (!user?.userId) {
     throw new ApiError(401, 'Authentication required', 'AUTH_REQUIRED');
@@ -41,19 +43,26 @@ const parsePositiveDuration = (value, fieldName) => {
     throw new ApiError(400, `${fieldName} must be greater than 0`, 'VALIDATION_ERROR');
   }
 
+  if (parsed > MAX_SESSION_HOURS) {
+    throw new ApiError(400, `Maximum session duration is ${MAX_SESSION_HOURS} hours`, 'VALIDATION_ERROR');
+  }
+
   return parsed;
 };
 
-const resolveCompletionDurations = (scheduledDuration, rawActualDuration) => {
-  const actualDuration = parsePositiveDuration(rawActualDuration, 'actualDuration') ?? scheduledDuration;
+const resolveBillableHours = (scheduledDuration, rawActualDuration) => {
+  const actualDuration =
+    parsePositiveDuration(rawActualDuration, 'actualDuration') ?? scheduledDuration;
+  const cappedActual = Math.min(actualDuration, MAX_SESSION_HOURS);
+  const cappedScheduled = Math.min(scheduledDuration, MAX_SESSION_HOURS);
+  const billableHours = Math.min(cappedScheduled, cappedActual);
 
   return {
-    actualDuration,
-    chargedCredits: Math.min(scheduledDuration, actualDuration),
+    actualDuration: cappedActual,
+    billableHours,
   };
 };
 
-// Keep participant payload lightweight when listing sessions.
 const sanitizePublicUser = (user) => {
   if (!user) {
     return null;
@@ -68,7 +77,6 @@ const sanitizePublicUser = (user) => {
   };
 };
 
-// "Populate" teacher/learner using userId (string refs), not ObjectId refs.
 const withPopulatedParticipants = async (sessions) => {
   const userIds = [...new Set(sessions.flatMap((session) => [session.teacherId, session.learnerId]))];
   const users = await User.find({ userId: { $in: userIds } })
@@ -77,16 +85,13 @@ const withPopulatedParticipants = async (sessions) => {
 
   const userMap = new Map(users.map((user) => [user.userId, user]));
 
-  return sessions.map((session) => {
-    return {
-      ...session,
-      teacher: sanitizePublicUser(userMap.get(session.teacherId)),
-      learner: sanitizePublicUser(userMap.get(session.learnerId)),
-    };
-  });
+  return sessions.map((session) => ({
+    ...session,
+    teacher: sanitizePublicUser(userMap.get(session.teacherId)),
+    learner: sanitizePublicUser(userMap.get(session.learnerId)),
+  }));
 };
 
-// Validates that requested teacher exists and can receive requests.
 const ensureTeacherExists = async (teacherId) => {
   const teacher = await User.findOne({
     userId: teacherId,
@@ -100,10 +105,105 @@ const ensureTeacherExists = async (teacherId) => {
   return teacher;
 };
 
-// Learner opens a new request-like session in PENDING state.
+const getSessionDocumentById = async (sessionId, options = {}) => {
+  const normalizedSessionId = normalizeSessionId(sessionId);
+  const session = await Session.findOne({ sessionId: normalizedSessionId }, null, options);
+
+  if (!session) {
+    throw new ApiError(404, 'Session not found', 'SESSION_NOT_FOUND');
+  }
+
+  return session;
+};
+
+const getParticipantRole = (session, userId) => {
+  if (session.teacherId === userId) {
+    return 'TEACHER';
+  }
+
+  if (session.learnerId === userId) {
+    return 'LEARNER';
+  }
+
+  return null;
+};
+
+// Settles credits + XP after BOTH participants confirmed completion.
+const finalizeSessionSettlement = async (session, mongoSession) => {
+  if (session.creditsTransferred) {
+    return session;
+  }
+
+  const { actualDuration, billableHours } = resolveBillableHours(
+    session.duration,
+    session.actualDuration || session.duration
+  );
+
+  const teacherSkill = await skillService.findTeacherSkillForSession(
+    session.teacherId,
+    session.skill
+  );
+
+  const skillTier = teacherSkill?.skillTier || 'STARTER';
+  const trustModifier = teacherSkill?.trustModifier || 1;
+
+  const calculatedCredits = creditService.calculateCredits({
+    hours: billableHours,
+    skillTier,
+    trustModifier,
+  });
+
+  await creditService.validateWeeklyCap({
+    teacherId: session.teacherId,
+    amount: calculatedCredits,
+    trustBadge: teacherSkill?.trustBadge || 'Unverified',
+    mongoSession,
+  });
+
+  await creditService.transferCredits({
+    fromUserId: session.learnerId,
+    toUserId: session.teacherId,
+    amount: calculatedCredits,
+    sessionId: session.sessionId,
+    mongoSession,
+  });
+
+  session.actualDuration = actualDuration;
+  session.chargedCredits = calculatedCredits;
+  session.creditBreakdown = {
+    hours: billableHours,
+    skillTier,
+    tierMultiplier: SKILL_TIER_MULTIPLIERS[skillTier] || 1,
+    trustModifier,
+    calculatedCredits,
+  };
+  session.status = 'COMPLETED';
+  session.creditsTransferred = true;
+  session.endorsementsUnlocked = true;
+  session.completedAt = new Date();
+
+  if (!session.xpAwarded) {
+    await xpService.awardSessionCompletionXP({
+      teacherId: session.teacherId,
+      creditsEarned: calculatedCredits,
+      sessionId: session.sessionId,
+      skill: session.skill,
+      mongoSession,
+    });
+    session.xpAwarded = true;
+  }
+
+  if (teacherSkill) {
+    await trustScoreService.recalculateSkillTrust(teacherSkill);
+  }
+
+  return session;
+};
+
 const requestSession = async (currentUser, payload) => {
   const learner = ensureAuthenticatedUser(currentUser);
   const teacherId = payload.teacherId.trim();
+  const duration = parsePositiveDuration(payload.duration, 'duration');
 
   if (learner.userId === teacherId) {
     throw new ApiError(400, 'You cannot request a session with yourself', 'VALIDATION_ERROR');
@@ -117,7 +217,7 @@ const requestSession = async (currentUser, payload) => {
     learnerId: learner.userId,
     teacherId,
     skill: payload.skill,
-    duration: payload.duration,
+    duration,
     date: payload.date,
     message: payload.message || '',
     status: 'PENDING',
@@ -126,7 +226,6 @@ const requestSession = async (currentUser, payload) => {
   return session.toObject();
 };
 
-// Lists sessions for current user with optional role/status filters.
 const listSessionsForUser = async (currentUser, query = {}) => {
   const user = ensureAuthenticatedUser(currentUser);
   const role = query.role?.trim().toUpperCase();
@@ -155,7 +254,6 @@ const listSessionsForUser = async (currentUser, query = {}) => {
   return withPopulatedParticipants(sessions);
 };
 
-// Lists sessions across the app for discovery views.
 const listSessionsDirectory = async (currentUser, query = {}) => {
   ensureAuthenticatedUser(currentUser);
   const status = query.status?.trim().toUpperCase();
@@ -173,24 +271,6 @@ const listSessionsDirectory = async (currentUser, query = {}) => {
   return withPopulatedParticipants(sessions);
 };
 
-const getSessionDocumentById = async (sessionId, options = {}) => {
-  const normalizedSessionId = normalizeSessionId(sessionId);
-  const session = await Session.findOne(
-    {
-      sessionId: normalizedSessionId,
-    },
-    null,
-    options
-  );
-
-  if (!session) {
-    throw new ApiError(404, 'Session not found', 'SESSION_NOT_FOUND');
-  }
-
-  return session;
-};
-
-// Only teacher can accept and only from PENDING.
 const acceptSession = async (currentUser, sessionId) => {
   const user = ensureAuthenticatedUser(currentUser);
   const session = await getSessionDocumentById(sessionId);
@@ -209,7 +289,6 @@ const acceptSession = async (currentUser, sessionId) => {
   return session.toObject();
 };
 
-// Only teacher can reject and only from PENDING.
 const rejectSession = async (currentUser, sessionId) => {
   const user = ensureAuthenticatedUser(currentUser);
   const session = await getSessionDocumentById(sessionId);
@@ -228,7 +307,6 @@ const rejectSession = async (currentUser, sessionId) => {
   return session.toObject();
 };
 
-// Learner can cancel their own pending request.
 const cancelSession = async (currentUser, sessionId) => {
   const user = ensureAuthenticatedUser(currentUser);
   const session = await getSessionDocumentById(sessionId);
@@ -256,11 +334,7 @@ const deleteSession = async (currentUser, sessionId) => {
   }
 
   if (session.status === 'COMPLETED' || session.creditsTransferred) {
-    throw new ApiError(
-      409,
-      'Completed sessions cannot be deleted',
-      'SESSION_INVALID_STATUS'
-    );
+    throw new ApiError(409, 'Completed sessions cannot be deleted', 'SESSION_INVALID_STATUS');
   }
 
   const deletedSession = session.toObject();
@@ -269,70 +343,66 @@ const deleteSession = async (currentUser, sessionId) => {
   return deletedSession;
 };
 
-// Completes session + transfers credits atomically in one DB transaction.
-const completeSession = async (currentUser, sessionId, payload = {}) => {
+// Dual confirmation — each participant confirms; settlement runs when both agree.
+const confirmSessionCompletion = async (currentUser, sessionId, payload = {}) => {
   const user = ensureAuthenticatedUser(currentUser);
   const mongoSession = await mongoose.startSession();
 
   try {
-    let completedSession;
+    let resultSession;
 
     await mongoSession.withTransaction(async () => {
       const session = await getSessionDocumentById(sessionId, { session: mongoSession });
+      const role = getParticipantRole(session, user.userId);
 
-      if (session.teacherId !== user.userId && user.role !== 'ADMIN') {
-        throw new ApiError(403, 'Only the teacher can complete this session', 'FORBIDDEN');
+      if (!role && user.role !== 'ADMIN') {
+        throw new ApiError(403, 'Only session participants can confirm completion', 'FORBIDDEN');
       }
 
-      if (session.status === 'COMPLETED' || session.creditsTransferred || session.xpAwarded) {
+      if (session.status === 'COMPLETED' || session.creditsTransferred) {
         throw new ApiError(409, 'Session has already been completed', 'SESSION_ALREADY_COMPLETED');
       }
 
       if (session.status !== 'ACCEPTED') {
-        throw new ApiError(409, 'Only accepted sessions can be completed', 'SESSION_INVALID_STATUS');
+        throw new ApiError(409, 'Only accepted sessions can be confirmed', 'SESSION_INVALID_STATUS');
       }
 
-      const { actualDuration, chargedCredits } = resolveCompletionDurations(
-        session.duration,
-        payload.actualDuration
-      );
+      const { actualDuration } = resolveBillableHours(session.duration, payload.actualDuration);
 
-      // Transfer amount is capped by the booked duration (1 hour = 1 credit).
-      await creditService.transferCredits({
-        fromUserId: session.learnerId,
-        toUserId: session.teacherId,
-        amount: chargedCredits,
-        sessionId: session.sessionId,
-        mongoSession,
-      });
+      if (role === 'TEACHER' || (user.role === 'ADMIN' && session.teacherId === user.userId)) {
+        if (session.teacherConfirmed) {
+          throw new ApiError(409, 'Teacher already confirmed this session', 'CONFIRMATION_EXISTS');
+        }
 
-      session.actualDuration = actualDuration;
-      session.chargedCredits = chargedCredits;
-      session.status = 'COMPLETED';
-      session.creditsTransferred = true;
-      session.completedAt = new Date();
+        session.teacherConfirmed = true;
+        session.teacherConfirmedAt = new Date();
+        session.actualDuration = actualDuration;
+      } else if (role === 'LEARNER' || user.role === 'ADMIN') {
+        if (session.learnerConfirmed) {
+          throw new ApiError(409, 'Learner already confirmed this session', 'CONFIRMATION_EXISTS');
+        }
 
-      // Teacher earns XP from credits taught: 1 credit = 10 XP (MVP rule, once per session).
-      if (!session.xpAwarded) {
-        await xpService.awardSessionCompletionXP({
-          teacherId: session.teacherId,
-          creditsEarned: chargedCredits,
-          sessionId: session.sessionId,
-          skill: session.skill,
-          mongoSession,
-        });
-        session.xpAwarded = true;
+        session.learnerConfirmed = true;
+        session.learnerConfirmedAt = new Date();
+      }
+
+      if (session.teacherConfirmed && session.learnerConfirmed) {
+        await finalizeSessionSettlement(session, mongoSession);
       }
 
       await session.save({ session: mongoSession });
-
-      completedSession = session.toObject();
+      resultSession = session.toObject();
     });
 
-    return completedSession;
+    return resultSession;
   } finally {
     await mongoSession.endSession();
   }
+};
+
+// Backward-compatible: teacher complete = teacher confirmation (learner must still confirm).
+const completeSession = async (currentUser, sessionId, payload = {}) => {
+  return confirmSessionCompletion(currentUser, sessionId, payload);
 };
 
 module.exports = {
@@ -343,5 +413,6 @@ module.exports = {
   rejectSession,
   cancelSession,
   deleteSession,
+  confirmSessionCompletion,
   completeSession,
 };
