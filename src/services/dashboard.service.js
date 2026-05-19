@@ -15,6 +15,8 @@ const User = require('../models/User');
 const ValidationRequest = require('../models/ValidationRequest');
 const { getMentorValidationOverview } = require('./validation.service');
 const { formatXpProfile } = require('./xp.service');
+const { getWeeklyCreditsEarned } = require('./credit.service');
+const { UNVERIFIED_WEEKLY_CREDIT_CAP } = require('../constants/mechanics');
 const { ensureDefaultSkillCategory } = require('../utils/skillCategory.util');
 
 const MENTOR_ROLES = new Set(['MENTOR', 'ADMIN']);
@@ -298,6 +300,89 @@ const buildProfileReviews = async (userId) => {
   }));
 };
 
+const buildMechanicsOverview = async (user, sessions, ownSkillRecords, participantMap) => {
+  const weeklyEarned = isMentorUser(user) ? await getWeeklyCreditsEarned(user.userId) : 0;
+
+  const trustSkills = [...ownSkillRecords]
+    .sort((left, right) => (right.trustScore || 0) - (left.trustScore || 0))
+    .slice(0, 4)
+    .map((skill) => ({
+      id: skill.skillId,
+      skillName: skill.skillName,
+      name: skill.skillName,
+      trustScore: skill.trustScore ?? 0,
+      trustBadge: skill.trustBadge ?? 'Unverified',
+      trustModifier: skill.trustModifier ?? 1,
+      skillTier: skill.skillTier ?? 'STARTER',
+      portfolioScore: skill.portfolioScore ?? 0,
+      endorsementScore: skill.endorsementScore ?? 0,
+      endorsementsCount: skill.endorsementsCount ?? 0,
+    }));
+
+  const sessionsPendingConfirmation = sessions
+    .filter((session) => session.status === 'ACCEPTED' && !session.creditsTransferred)
+    .slice(0, 5)
+    .map((session) => {
+      const isTeacher = session.teacherId === user.userId;
+      const otherUserId = isTeacher ? session.learnerId : session.teacherId;
+      const otherUser = participantMap.get(otherUserId);
+
+      return {
+        id: session.sessionId,
+        teacherId: session.teacherId,
+        learnerId: session.learnerId,
+        rawStatus: session.status,
+        teacherConfirmed: Boolean(session.teacherConfirmed),
+        learnerConfirmed: Boolean(session.learnerConfirmed),
+        endorsementsUnlocked: Boolean(session.endorsementsUnlocked),
+        creditBreakdown: session.creditBreakdown || null,
+        title: session.skill,
+        participantName: buildFullName(otherUser || { email: otherUserId }),
+        time: formatDateTimeLabel(session.date),
+        duration: formatDurationLabel(session.duration),
+      };
+    });
+
+  const topTrustSkill = trustSkills[0] || null;
+
+  return {
+    credits: {
+      balance: readDecimalValue(user.timeCredits),
+      weeklyEarned,
+      weeklyCap: UNVERIFIED_WEEKLY_CREDIT_CAP,
+    },
+    trustSkills,
+    trustSummary: topTrustSkill
+      ? {
+          topBadge: topTrustSkill.trustBadge,
+          topScore: topTrustSkill.trustScore,
+          skillCount: ownSkillRecords.length,
+        }
+      : null,
+    sessionsPendingConfirmation,
+  };
+};
+
+const buildTrustStatCard = (trustSummary) => {
+  if (!trustSummary) {
+    return {
+      id: 'trust',
+      label: 'Trust score',
+      value: '—',
+      note: 'Add skills to build per-skill trust',
+      icon: 'trust',
+    };
+  }
+
+  return {
+    id: 'trust',
+    label: 'Top trust',
+    value: `${trustSummary.topBadge} · ${trustSummary.topScore}`,
+    note: `${trustSummary.skillCount} skill${trustSummary.skillCount === 1 ? '' : 's'} tracked`,
+    icon: 'trust',
+  };
+};
+
 const buildXpStatCard = (xpProfile) => {
   const xpTotal = xpProfile?.xpTotal ?? 0;
   const level = xpProfile?.level ?? 1;
@@ -374,6 +459,8 @@ const getOverview = async (currentUser) => {
     price: mentor.price,
   }));
 
+  const mechanics = await buildMechanicsOverview(user, sessions, ownSkillRecords, participantMap);
+
   const baseOverview = {
     welcome: {
       firstName: user.firstName || 'Member',
@@ -382,6 +469,7 @@ const getOverview = async (currentUser) => {
     role: isMentorUser(user) ? 'mentor' : 'learner',
     creditsAvailable: readDecimalValue(user.timeCredits),
     xp,
+    mechanics,
     upcomingSessions,
     recommendedSkills,
   };
@@ -397,6 +485,7 @@ const getOverview = async (currentUser) => {
       recentValidationActivity: validationOverview.recentActivity,
       stats: [
         buildXpStatCard(xp),
+        buildTrustStatCard(mechanics.trustSummary),
         {
           id: 'pending-validations',
           label: 'Pending reviews',
@@ -436,11 +525,14 @@ const getOverview = async (currentUser) => {
     ...baseOverview,
     stats: [
       buildXpStatCard(xp),
+      buildTrustStatCard(mechanics.trustSummary),
       {
         id: 'credits',
         label: 'Credits Balance',
         value: String(readDecimalValue(user.timeCredits)),
-        note: 'Available now',
+        note: isMentorUser(user)
+          ? `${mechanics.credits.weeklyEarned} earned this week · cap ${mechanics.credits.weeklyCap} if Unverified`
+          : 'Available now',
         icon: 'credits',
       },
       {
