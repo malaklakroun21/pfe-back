@@ -3,6 +3,10 @@ jest.mock('../../../src/models/User', () => ({
   create: jest.fn(),
 }));
 
+jest.mock('../../../src/models/SystemSettings', () => ({
+  findOne: jest.fn().mockResolvedValue(null),
+}));
+
 jest.mock('../../../src/models/CreditBalance', () => ({
   create: jest.fn(),
 }));

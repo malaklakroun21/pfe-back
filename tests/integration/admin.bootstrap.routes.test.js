@@ -20,6 +20,19 @@ jest.mock('../../src/models/AuditLog', () => ({
 }));
 
 jest.mock('../../src/models/SystemSettings', () => ({
+  findOne: jest.fn().mockResolvedValue(null),
+}));
+
+jest.mock('../../src/utils/hash', () => ({
+  hashPassword: jest.fn().mockResolvedValue('hashed-password'),
+  comparePassword: jest.fn(),
+}));
+
+jest.mock('../../src/utils/jwt', () => ({
+  signAccessToken: jest.fn().mockReturnValue('signed-access-token'),
+}));
+
+jest.mock('../../src/models/SystemSettings', () => ({
   findOne: jest.fn(),
 }));
 
@@ -43,7 +56,12 @@ describe('admin bootstrap registration route', () => {
     process.env.ADMIN_BOOTSTRAP_SECRET = 'bootstrap-secret';
 
     User.findOne.mockResolvedValue(null);
-    User.create.mockImplementation(async (payload) => payload);
+    User.create.mockImplementation(async (payload) => ({
+      ...payload,
+      toObject() {
+        return { ...this };
+      },
+    }));
     Admin.findOne.mockResolvedValue(null);
     Admin.create.mockImplementation(async (payload) => payload);
     CreditBalance.create.mockImplementation(async (payload) => payload);

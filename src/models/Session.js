@@ -64,6 +64,11 @@ const sessionSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    // Marks whether teacher XP was granted for this session (1 credit = 10 XP).
+    xpAwarded: {
+      type: Boolean,
+      default: false,
+    },
     completedAt: {
       type: Date,
     },

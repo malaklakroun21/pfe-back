@@ -7,6 +7,10 @@ jest.mock('../../../src/models/User', () => ({
   countDocuments: jest.fn(),
 }));
 
+jest.mock('../../../src/services/validation.service', () => ({
+  ensureLearnerCanOfferSkill: jest.fn().mockResolvedValue(undefined),
+}));
+
 const createUserDoc = (overrides = {}) => {
   return {
     userId: 'USR-123',
@@ -89,7 +93,17 @@ describe('user.service', () => {
         profilePicture: 'https://old.example.com/avatar.jpg',
       });
 
-      User.findOne.mockResolvedValue(userDoc);
+      User.findOne.mockImplementation(async (filter = {}) => {
+        if (filter.email && filter.userId?.$ne) {
+          return null;
+        }
+
+        if (filter.userId === 'USR-2' && filter.accountStatus === 'ACTIVE') {
+          return userDoc;
+        }
+
+        return null;
+      });
 
       const result = await userService.updateUserProfile('USR-2', {
         name: 'New Name',

@@ -5,6 +5,7 @@ const City = require('../models/City');
 const Country = require('../models/Country');
 const MentorApplication = require('../models/MentorApplication');
 const MentorCredential = require('../models/MentorCredential');
+const MentorSkill = require('../models/MentorSkill');
 const Notification = require('../models/Notification');
 const Rating = require('../models/Rating');
 const Session = require('../models/Session');
@@ -14,6 +15,7 @@ const SkillEvidence = require('../models/SkillEvidence');
 const User = require('../models/User');
 const ValidationRequest = require('../models/ValidationRequest');
 const { getMentorValidationOverview } = require('./validation.service');
+const { formatXpProfile } = require('./xp.service');
 const { ensureDefaultSkillCategory } = require('../utils/skillCategory.util');
 
 const MENTOR_ROLES = new Set(['MENTOR', 'ADMIN']);
@@ -108,8 +110,108 @@ const buildSkillKey = (skillName = '') => {
     .replace(/^-+|-+$/g, '');
 };
 
+const buildNormalizedSkillNameKey = (skillName = '') => {
+  return String(skillName).trim().toLowerCase();
+};
+
 const uniqueStrings = (values = []) => {
   return [...new Set(values.filter(Boolean))];
+};
+
+const buildGlobalSkillCatalog = async () => {
+  const [skillDocs, mentorSkillDocs, users] = await Promise.all([
+    Skill.find({}).lean(),
+    MentorSkill.find({ isActive: true }).lean(),
+    User.find({ accountStatus: 'ACTIVE' }).lean(),
+  ]);
+
+  const categoryIds = uniqueStrings([
+    ...skillDocs.map((skill) => skill.categoryId),
+    ...mentorSkillDocs.map((skill) => skill.skillCategoryId),
+  ]);
+  const categories = categoryIds.length
+    ? await SkillCategory.find({ categoryId: { $in: categoryIds } }).lean()
+    : [];
+  const categoryMap = new Map(
+    categories.map((category) => [category.categoryId, category.categoryName])
+  );
+  const skillCatalogMap = new Map();
+
+  const upsertCatalogSkill = (skillName, options = {}) => {
+    const normalizedSkillName = String(skillName || '').trim();
+
+    if (!normalizedSkillName) {
+      return;
+    }
+
+    const catalogKey = buildNormalizedSkillNameKey(normalizedSkillName);
+    let catalogEntry = skillCatalogMap.get(catalogKey);
+
+    if (!catalogEntry) {
+      catalogEntry = {
+        id: buildSkillKey(normalizedSkillName),
+        skillId: '',
+        label: normalizedSkillName,
+        evidenceCount: 0,
+        hasExistingEvidence: false,
+        requestStatus: '',
+        validationStatus: 'UNVALIDATED',
+        canTeach: false,
+        isProfileSkill: false,
+        isCatalogSkill: true,
+        categoryNames: new Set(),
+      };
+      skillCatalogMap.set(catalogKey, catalogEntry);
+    }
+
+    const normalizedCategoryName = String(options.categoryName || '').trim();
+
+    if (normalizedCategoryName) {
+      catalogEntry.categoryNames.add(normalizedCategoryName);
+    }
+  };
+
+  skillDocs.forEach((skill) => {
+    upsertCatalogSkill(skill.skillName, {
+      categoryName: categoryMap.get(skill.categoryId) || 'General',
+    });
+  });
+
+  mentorSkillDocs.forEach((skill) => {
+    upsertCatalogSkill(skill.skillName, {
+      categoryName: categoryMap.get(skill.skillCategoryId) || 'General',
+    });
+  });
+
+  users.forEach((user) => {
+    [...(user.offeredSkills || []), ...(user.wantedSkills || [])].forEach((skillName) => {
+      upsertCatalogSkill(skillName);
+    });
+  });
+
+  return [...skillCatalogMap.values()]
+    .map((skill) => {
+      const categoryNames = [...skill.categoryNames].sort((left, right) => left.localeCompare(right));
+      const categoryLabel =
+        categoryNames.length === 0
+          ? 'Available in the app'
+          : `Available in the app - ${categoryNames.slice(0, 2).join(', ')}`;
+
+      return {
+        id: skill.id,
+        skillId: '',
+        label: skill.label,
+        description: categoryLabel,
+        evidenceCount: 0,
+        hasExistingEvidence: false,
+        requestStatus: '',
+        validationStatus: 'UNVALIDATED',
+        canTeach: false,
+        isProfileSkill: false,
+        isCatalogSkill: true,
+      };
+    })
+    .sort((left, right) => left.label.localeCompare(right.label));
 };
 
 const uniqueLinksByHref = (links = []) => {
@@ -297,8 +399,25 @@ const buildProfileReviews = async (userId) => {
   }));
 };
 
+const buildXpStatCard = (xpProfile) => {
+  const xpTotal = xpProfile?.xpTotal ?? 0;
+  const level = xpProfile?.level ?? 1;
+  const levelTitle = xpProfile?.levelTitle ?? 'Seed';
+
+  return {
+    id: 'xp',
+    label: 'Your level',
+    value: `Lv${level} · ${levelTitle}`,
+    note: xpProfile?.isMaxLevel
+      ? `${xpTotal.toLocaleString()} XP · Oasis reached`
+      : `${xpTotal.toLocaleString()} XP · ${xpProfile?.progressPercent ?? 0}% to next level`,
+    icon: 'xp',
+  };
+};
+
 const getOverview = async (currentUser) => {
   const user = ensureAuthenticatedUser(currentUser);
+  const xp = formatXpProfile(user, { includeHistory: true, historyLimit: 5 });
   const [sessions, userRatingMap, ownSkillMap, mentorDirectory] = await Promise.all([
     Session.find({
       $or: [{ teacherId: user.userId }, { learnerId: user.userId }],
@@ -363,6 +482,7 @@ const getOverview = async (currentUser) => {
     },
     role: isMentorUser(user) ? 'mentor' : 'learner',
     creditsAvailable: readDecimalValue(user.timeCredits),
+    xp,
     upcomingSessions,
     recommendedSkills,
   };
@@ -377,6 +497,7 @@ const getOverview = async (currentUser) => {
       pendingValidationRequests: validationOverview.recentPending,
       recentValidationActivity: validationOverview.recentActivity,
       stats: [
+        buildXpStatCard(xp),
         {
           id: 'pending-validations',
           label: 'Pending reviews',
@@ -415,6 +536,7 @@ const getOverview = async (currentUser) => {
   return {
     ...baseOverview,
     stats: [
+      buildXpStatCard(xp),
       {
         id: 'credits',
         label: 'Credits Balance',
@@ -574,13 +696,14 @@ const getExploreDirectory = async (currentUser) => {
 
 const getValidationData = async (currentUser) => {
   const user = ensureAuthenticatedUser(currentUser);
-  const [skillMap, mentorDirectory, sessions, activeRequests] = await Promise.all([
+  const [skillMap, mentorDirectory, sessions, activeRequests, globalSkillCatalog] = await Promise.all([
     buildSkillRecordsByUserId([user.userId]),
     buildMentorDirectory(user.userId),
     Session.find({
       $or: [{ teacherId: user.userId }, { learnerId: user.userId }],
     }).lean(),
     ValidationRequest.find({ learnerUserId: user.userId }).lean(),
+    buildGlobalSkillCatalog(),
   ]);
 
   const skillRecords = skillMap.get(user.userId) || [];
@@ -615,7 +738,7 @@ const getValidationData = async (currentUser) => {
           validationScore: 0,
         }));
 
-  const skillOptions = derivedSkills.map((skill) => {
+  const profileSkillOptions = derivedSkills.map((skill) => {
     const evidenceCount = skill.skillId ? evidenceCountMap.get(skill.skillId) || 0 : 0;
     const activeRequest = skill.skillId ? requestMap.get(skill.skillId) : null;
 
@@ -629,8 +752,20 @@ const getValidationData = async (currentUser) => {
       requestStatus: activeRequest?.requestStatus || '',
       validationStatus: skill.validationStatus || 'UNVALIDATED',
       canTeach: skill.validationStatus === 'VALIDATED',
+      isProfileSkill: true,
+      isCatalogSkill: true,
     };
   });
+
+  const profileSkillNameSet = new Set(
+    profileSkillOptions.map((skill) => buildNormalizedSkillNameKey(skill.label))
+  );
+  const skillOptions = [
+    ...profileSkillOptions,
+    ...globalSkillCatalog.filter((skill) => {
+      return !profileSkillNameSet.has(buildNormalizedSkillNameKey(skill.label));
+    }),
+  ];
 
   const mentorOptions = mentorDirectory.map((mentor) => ({
     id: mentor.id,
