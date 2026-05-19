@@ -3,6 +3,14 @@ jest.mock('../../../src/models/User', () => ({
   create: jest.fn(),
 }));
 
+jest.mock('../../../src/models/CreditBalance', () => ({
+  create: jest.fn(),
+}));
+
+jest.mock('../../../src/models/SystemSettings', () => ({
+  findOne: jest.fn(),
+}));
+
 jest.mock('../../../src/utils/hash', () => ({
   hashPassword: jest.fn(),
   comparePassword: jest.fn(),
@@ -20,6 +28,8 @@ jest.mock('../../../src/utils/token', () => ({
 jest.mock('../../../src/utils/email', () => jest.fn());
 
 const User = require('../../../src/models/User');
+const CreditBalance = require('../../../src/models/CreditBalance');
+const SystemSettings = require('../../../src/models/SystemSettings');
 const { hashPassword } = require('../../../src/utils/hash');
 const { signAccessToken } = require('../../../src/utils/jwt');
 const { generateResetToken } = require('../../../src/utils/token');
@@ -32,6 +42,8 @@ describe('auth.service', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     process.env.CLIENT_URL = 'http://localhost:3000';
+    SystemSettings.findOne.mockResolvedValue(null);
+    CreditBalance.create.mockImplementation(async (payload) => payload);
   });
 
   afterAll(() => {
@@ -71,6 +83,14 @@ describe('auth.service', () => {
 
       const createdUserPayload = User.create.mock.calls[0][0];
       expect(createdUserPayload.timeCredits.toString()).toBe('10');
+      expect(CreditBalance.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: createdUserPayload.userId,
+          currentBalance: 10,
+          totalEarned: 10,
+          totalSpent: 0,
+        })
+      );
       expect(result.user.timeCredits.toString()).toBe('10');
       expect(result.accessToken).toBe('signed-access-token');
     });

@@ -11,13 +11,23 @@ jest.mock('../../src/models/Admin', () => ({
   create: jest.fn(),
 }));
 
+jest.mock('../../src/models/CreditBalance', () => ({
+  create: jest.fn(),
+}));
+
 jest.mock('../../src/models/AuditLog', () => ({
   create: jest.fn(),
 }));
 
+jest.mock('../../src/models/SystemSettings', () => ({
+  findOne: jest.fn(),
+}));
+
 const User = require('../../src/models/User');
 const Admin = require('../../src/models/Admin');
+const CreditBalance = require('../../src/models/CreditBalance');
 const AuditLog = require('../../src/models/AuditLog');
+const SystemSettings = require('../../src/models/SystemSettings');
 const authRoutes = require('../../src/routes/auth.routes');
 const errorHandler = require('../../src/middleware/error.middleware');
 
@@ -36,7 +46,9 @@ describe('admin bootstrap registration route', () => {
     User.create.mockImplementation(async (payload) => payload);
     Admin.findOne.mockResolvedValue(null);
     Admin.create.mockImplementation(async (payload) => payload);
+    CreditBalance.create.mockImplementation(async (payload) => payload);
     AuditLog.create.mockImplementation(async (payload) => payload);
+    SystemSettings.findOne.mockResolvedValue(null);
   });
 
   it('rejects admin bootstrap registration without the configured secret', async () => {
@@ -66,6 +78,7 @@ describe('admin bootstrap registration route', () => {
     expect(response.status).toBe(201);
     expect(response.body.data.user.role).toBe('ADMIN');
     expect(response.body.data.accessToken).toBeDefined();
+    expect(CreditBalance.create).toHaveBeenCalled();
     expect(Admin.create).toHaveBeenCalled();
     expect(AuditLog.create).toHaveBeenCalled();
   });

@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const User = require('../models/User');
 const Admin = require('../models/Admin');
 const AuditLog = require('../models/AuditLog');
+const CreditBalance = require('../models/CreditBalance');
 const ApiError = require('../utils/ApiError');
 const { hashPassword, comparePassword } = require('../utils/hash');
 const { signAccessToken } = require('../utils/jwt');
@@ -20,6 +21,20 @@ async function getInitialTimeCredits() {
   const value = parseFloat(setting?.settingValue);
   return (Number.isFinite(value) && value >= 0) ? String(value) : DEFAULT_INITIAL_TIME_CREDITS;
 }
+
+const buildInitialCreditBalancePayload = ({ userId, initialCredits }) => {
+  const initialCreditAmount = Number(initialCredits);
+
+  return {
+    balanceId: `BAL-${randomUUID()}`,
+    userId,
+    currentBalance: initialCreditAmount,
+    totalEarned: initialCreditAmount,
+    totalSpent: 0,
+    lastUpdated: new Date(),
+    updatedBy: userId,
+  };
+};
 
 const buildAuthPayload = (user) => {
   return {
@@ -54,6 +69,13 @@ const register = async (payload) => {
     role: payload.role || 'LEARNER',
     timeCredits: mongoose.Types.Decimal128.fromString(initialCredits),
   });
+
+  await CreditBalance.create(
+    buildInitialCreditBalancePayload({
+      userId: user.userId,
+      initialCredits,
+    })
+  );
 
   return buildAuthPayload(user);
 };
@@ -179,6 +201,13 @@ const registerAdmin = async (payload, options = {}) => {
     emailVerified: true,
     timeCredits: mongoose.Types.Decimal128.fromString(initialCredits),
   });
+
+  await CreditBalance.create(
+    buildInitialCreditBalancePayload({
+      userId: user.userId,
+      initialCredits,
+    })
+  );
 
   await Admin.create({
     userId: user.userId,

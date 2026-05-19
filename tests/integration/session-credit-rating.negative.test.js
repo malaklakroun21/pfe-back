@@ -29,6 +29,10 @@ jest.mock('../../src/middleware/auth.middleware', () => {
   };
 });
 
+jest.mock('../../src/services/validation.service', () => ({
+  ensureTeacherCanTeachSkill: jest.fn().mockResolvedValue(undefined),
+}));
+
 jest.mock('../../src/models/User', () => ({
   findOne: jest.fn(),
   find: jest.fn(),
@@ -44,6 +48,10 @@ jest.mock('../../src/models/Session', () => ({
 jest.mock('../../src/models/CreditTransaction', () => ({
   create: jest.fn(),
   find: jest.fn(),
+}));
+
+jest.mock('../../src/models/CreditBalance', () => ({
+  updateOne: jest.fn(),
 }));
 
 jest.mock('../../src/models/Rating', () => ({
@@ -63,6 +71,7 @@ jest.mock('mongoose', () => {
 const mongoose = require('mongoose');
 const User = require('../../src/models/User');
 const Session = require('../../src/models/Session');
+const CreditBalance = require('../../src/models/CreditBalance');
 const CreditTransaction = require('../../src/models/CreditTransaction');
 const Rating = require('../../src/models/Rating');
 
@@ -210,6 +219,8 @@ describe('session + credit + rating negative flows', () => {
     CreditTransaction.create.mockImplementation(async ([payload]) => {
       return [{ ...payload, toObject: () => ({ ...payload }) }];
     });
+
+    CreditBalance.updateOne.mockResolvedValue({ modifiedCount: 1 });
 
     Rating.findOne.mockImplementation(async (filter) => {
       return (

@@ -33,6 +33,10 @@ jest.mock('../../src/middleware/auth.middleware', () => {
   };
 });
 
+jest.mock('../../src/services/validation.service', () => ({
+  ensureTeacherCanTeachSkill: jest.fn().mockResolvedValue(undefined),
+}));
+
 jest.mock('../../src/models/User', () => ({
   findOne: jest.fn(),
   find: jest.fn(),
@@ -48,6 +52,10 @@ jest.mock('../../src/models/Session', () => ({
 jest.mock('../../src/models/CreditTransaction', () => ({
   create: jest.fn(),
   find: jest.fn(),
+}));
+
+jest.mock('../../src/models/CreditBalance', () => ({
+  updateOne: jest.fn(),
 }));
 
 jest.mock('../../src/models/Rating', () => ({
@@ -67,6 +75,7 @@ jest.mock('mongoose', () => {
 const mongoose = require('mongoose');
 const User = require('../../src/models/User');
 const Session = require('../../src/models/Session');
+const CreditBalance = require('../../src/models/CreditBalance');
 const CreditTransaction = require('../../src/models/CreditTransaction');
 const Rating = require('../../src/models/Rating');
 
@@ -100,6 +109,7 @@ describe('session + credit + rating flow', () => {
   let sessions;
   let transactions;
   let ratings;
+  let creditBalances;
 
   const asDoc = (entity, collectionName) => {
     return {
@@ -155,6 +165,12 @@ describe('session + credit + rating flow', () => {
     sessions = [];
     transactions = [];
     ratings = [];
+    creditBalances = users.map((user) => ({
+      userId: user.userId,
+      currentBalance: user.timeCredits,
+      totalEarned: user.timeCredits,
+      totalSpent: 0,
+    }));
 
     const mockMongoSession = {
       withTransaction: jest.fn(async (cb) => cb()),
@@ -247,6 +263,35 @@ describe('session + credit + rating flow', () => {
       return createQueryChain(result);
     });
 
+    CreditBalance.updateOne.mockImplementation(async (filter, update) => {
+      let balance = creditBalances.find((candidate) => candidate.userId === filter.userId);
+
+      if (!balance) {
+        balance = {
+          ...update.$setOnInsert,
+        };
+        creditBalances.push(balance);
+      }
+
+      if (update.$inc?.currentBalance) {
+        balance.currentBalance += update.$inc.currentBalance;
+      }
+
+      if (update.$inc?.totalEarned) {
+        balance.totalEarned += update.$inc.totalEarned;
+      }
+
+      if (update.$inc?.totalSpent) {
+        balance.totalSpent += update.$inc.totalSpent;
+      }
+
+      if (update.$set) {
+        Object.assign(balance, update.$set);
+      }
+
+      return { modifiedCount: 1 };
+    });
+
     Rating.findOne.mockImplementation(async (filter) => {
       return (
         ratings.find((item) => item.sessionId === filter.sessionId && item.fromUser === filter.fromUser) ||
@@ -321,6 +366,16 @@ describe('session + credit + rating flow', () => {
     const teacherAfter = users.find((user) => user.userId === 'USR-TEACHER');
     expect(learnerAfter.timeCredits).toBe(8);
     expect(teacherAfter.timeCredits).toBe(3);
+    expect(creditBalances.find((balance) => balance.userId === 'USR-LEARNER')).toMatchObject({
+      currentBalance: 8,
+      totalEarned: 10,
+      totalSpent: 2,
+    });
+    expect(creditBalances.find((balance) => balance.userId === 'USR-TEACHER')).toMatchObject({
+      currentBalance: 3,
+      totalEarned: 3,
+      totalSpent: 0,
+    });
     expect(transactions).toHaveLength(1);
 
     const secondCompleteResponse = await request(app)
@@ -411,6 +466,16 @@ describe('session + credit + rating flow', () => {
     const teacherAfter = users.find((user) => user.userId === 'USR-TEACHER');
     expect(learnerAfter.timeCredits).toBe(8.5);
     expect(teacherAfter.timeCredits).toBe(2.5);
+    expect(creditBalances.find((balance) => balance.userId === 'USR-LEARNER')).toMatchObject({
+      currentBalance: 8.5,
+      totalEarned: 10,
+      totalSpent: 1.5,
+    });
+    expect(creditBalances.find((balance) => balance.userId === 'USR-TEACHER')).toMatchObject({
+      currentBalance: 2.5,
+      totalEarned: 2.5,
+      totalSpent: 0,
+    });
     expect(transactions).toHaveLength(1);
     expect(transactions[0]).toMatchObject({
       fromUser: 'USR-LEARNER',

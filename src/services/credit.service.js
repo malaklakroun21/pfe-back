@@ -1,5 +1,7 @@
+const { randomUUID } = require('crypto');
 const mongoose = require('mongoose');
 
+const CreditBalance = require('../models/CreditBalance');
 const CreditTransaction = require('../models/CreditTransaction');
 const User = require('../models/User');
 const ApiError = require('../utils/ApiError');
@@ -24,6 +26,16 @@ const parseCreditAmount = (value) => {
   return amount;
 };
 
+const parseNonNegativeCreditAmount = (value, fieldName) => {
+  const amount = Number(value);
+
+  if (!Number.isFinite(amount) || amount < 0) {
+    throw new ApiError(400, `${fieldName} must be 0 or greater`, 'VALIDATION_ERROR');
+  }
+
+  return amount;
+};
+
 // User.timeCredits is Decimal128 in this codebase; normalize to Number.
 const readCreditValue = (user) => {
   if (!user) {
@@ -32,6 +44,64 @@ const readCreditValue = (user) => {
 
   const raw = user.timeCredits;
   return Number(raw?.toString?.() ?? raw ?? 0);
+};
+
+const getQueryOptions = (mongoSession) => {
+  return mongoSession ? { session: mongoSession } : {};
+};
+
+const syncCreditBalanceRecord = async ({
+  userId,
+  baseBalance,
+  currentBalanceDelta = 0,
+  totalEarnedDelta = 0,
+  totalSpentDelta = 0,
+  updatedBy,
+  mongoSession = null,
+}) => {
+  const normalizedUserId = normalizeUserId(userId, 'userId');
+  const normalizedBaseBalance = parseNonNegativeCreditAmount(baseBalance, 'baseBalance');
+  const normalizedCurrentBalanceDelta = Number(currentBalanceDelta);
+  const normalizedTotalEarnedDelta = parseNonNegativeCreditAmount(
+    totalEarnedDelta,
+    'totalEarnedDelta'
+  );
+  const normalizedTotalSpentDelta = parseNonNegativeCreditAmount(
+    totalSpentDelta,
+    'totalSpentDelta'
+  );
+
+  if (!Number.isFinite(normalizedCurrentBalanceDelta)) {
+    throw new ApiError(400, 'currentBalanceDelta must be a valid number', 'VALIDATION_ERROR');
+  }
+
+  await CreditBalance.updateOne(
+    {
+      userId: normalizedUserId,
+    },
+    {
+      $setOnInsert: {
+        balanceId: `BAL-${randomUUID()}`,
+        userId: normalizedUserId,
+        currentBalance: normalizedBaseBalance,
+        totalEarned: normalizedBaseBalance,
+        totalSpent: 0,
+      },
+      $inc: {
+        currentBalance: normalizedCurrentBalanceDelta,
+        totalEarned: normalizedTotalEarnedDelta,
+        totalSpent: normalizedTotalSpentDelta,
+      },
+      $set: {
+        lastUpdated: new Date(),
+        updatedBy: updatedBy || normalizedUserId,
+      },
+    },
+    {
+      ...getQueryOptions(mongoSession),
+      upsert: true,
+    }
+  );
 };
 
 // Core transfer primitive used by session completion flow.
@@ -55,7 +125,7 @@ const transferCredits = async ({
     throw new ApiError(400, 'Cannot transfer credits to the same user', 'VALIDATION_ERROR');
   }
 
-  const queryOptions = mongoSession ? { session: mongoSession } : {};
+  const queryOptions = getQueryOptions(mongoSession);
   const [fromUser, toUser] = await Promise.all([
     User.findOne({ userId: normalizedFromUserId }, null, queryOptions),
     User.findOne({ userId: normalizedToUserId }, null, queryOptions),
@@ -96,6 +166,25 @@ const transferCredits = async ({
     },
     queryOptions
   );
+
+  await Promise.all([
+    syncCreditBalanceRecord({
+      userId: normalizedFromUserId,
+      baseBalance: learnerCredits,
+      currentBalanceDelta: -parsedAmount,
+      totalSpentDelta: parsedAmount,
+      updatedBy: normalizedFromUserId,
+      mongoSession,
+    }),
+    syncCreditBalanceRecord({
+      userId: normalizedToUserId,
+      baseBalance: readCreditValue(toUser),
+      currentBalanceDelta: parsedAmount,
+      totalEarnedDelta: parsedAmount,
+      updatedBy: normalizedToUserId,
+      mongoSession,
+    }),
+  ]);
 
   // Audit trail record for history endpoint and financial traceability.
   const transaction = await CreditTransaction.create(
