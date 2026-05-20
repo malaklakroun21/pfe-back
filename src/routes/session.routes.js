@@ -14,6 +14,8 @@ router.use(protect);
 
 // Learner creates a session request.
 router.post('/request', validate(createSessionRequestSchema), sessionController.requestSession);
+// Users with at least one validated skill (potential teachers).
+router.get('/teachers', sessionController.getTeacherDirectory);
 // User lists own sessions (teacher/learner filters supported).
 router.get('/', sessionController.listSessions);
 // User explores sessions across the app.

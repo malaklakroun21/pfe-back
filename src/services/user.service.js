@@ -6,6 +6,7 @@ const City = require('../models/City');
 const Country = require('../models/Country');
 const User = require('../models/User');
 const ApiError = require('../utils/ApiError');
+const { hashPassword, comparePassword } = require('../utils/hash');
 const { ensureLearnerCanOfferSkill } = require('./validation.service');
 const { ALGERIA_CITY_NAMES } = require('../constants/algeria-cities');
 
@@ -667,6 +668,38 @@ const removeSkillWanted = async (userId, payload) => {
   return removeWantedSkillFromCurrentUser(user, payload);
 };
 
+const changePassword = async (user, payload) => {
+  const currentUser = ensureAuthenticatedUser(user);
+  const { currentPassword, newPassword, confirmPassword } = payload;
+
+  if (!currentPassword || !newPassword || !confirmPassword) {
+    throw new ApiError(400, 'All password fields are required', 'VALIDATION_ERROR');
+  }
+
+  if (newPassword !== confirmPassword) {
+    throw new ApiError(400, 'New passwords do not match', 'VALIDATION_ERROR');
+  }
+
+  if (newPassword.length < 8) {
+    throw new ApiError(400, 'New password must be at least 8 characters', 'VALIDATION_ERROR');
+  }
+
+  const userDoc = await User.findOne({ userId: currentUser.userId });
+
+  if (!userDoc) {
+    throw new ApiError(404, 'User not found', 'USER_NOT_FOUND');
+  }
+
+  const isValid = await comparePassword(currentPassword, userDoc.passwordHash);
+
+  if (!isValid) {
+    throw new ApiError(401, 'Current password is incorrect', 'INVALID_PASSWORD');
+  }
+
+  userDoc.passwordHash = await hashPassword(newPassword);
+  await userDoc.save();
+};
+
 module.exports = {
   sanitizeUser,
   sanitizePublicUser,
@@ -688,4 +721,5 @@ module.exports = {
   removeSkillOffered,
   addSkillWanted,
   removeSkillWanted,
+  changePassword,
 };

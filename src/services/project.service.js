@@ -99,6 +99,7 @@ const createProject = async (currentUser, payload) => {
 const listProjects = async (query = {}) => {
   const q = query.q?.trim();
   const ownerId = query.ownerId?.trim();
+  const memberId = query.memberId?.trim();
   const status = query.status?.trim().toUpperCase();
   const page = parsePositiveInteger(query.page, 1, 'page');
   const limit = parsePositiveInteger(query.limit, 20, 'limit', 100);
@@ -107,6 +108,10 @@ const listProjects = async (query = {}) => {
 
   if (ownerId) {
     filter.ownerId = ownerId;
+  }
+
+  if (memberId) {
+    filter['members.userId'] = memberId;
   }
 
   if (status) {

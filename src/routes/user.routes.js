@@ -14,6 +14,7 @@ router.get('/location-options/algeria', userController.getAlgerianCities);
 router.get('/me/skills/offered', userController.getOfferedSkills);
 router.get('/me/skills/wanted', userController.getWantedSkills);
 router.put('/me', validate(updateMeSchema), userController.updateMe);
+router.put('/me/password', userController.changePassword);
 router.post(
   '/me/skills/offered',
   validate(manageUserSkillSchema),

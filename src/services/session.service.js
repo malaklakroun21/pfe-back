@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const { randomUUID } = require('crypto');
 
 const Session = require('../models/Session');
+const Skill = require('../models/Skill');
 const User = require('../models/User');
 const ApiError = require('../utils/ApiError');
 const creditService = require('./credit.service');
@@ -335,6 +336,37 @@ const completeSession = async (currentUser, sessionId, payload = {}) => {
   }
 };
 
+// Returns all active users who have at least one validated skill, excluding the caller.
+const getTeacherDirectory = async (currentUser) => {
+  const user = ensureAuthenticatedUser(currentUser);
+
+  const validatedSkills = await Skill.find({ validationStatus: 'VALIDATED' }).lean();
+
+  if (!validatedSkills.length) {
+    return [];
+  }
+
+  const teacherIds = [...new Set(validatedSkills.map((s) => s.userId))].filter(
+    (id) => id !== user.userId
+  );
+
+  if (!teacherIds.length) {
+    return [];
+  }
+
+  const teachers = await User.find({
+    userId: { $in: teacherIds },
+    accountStatus: 'ACTIVE',
+  })
+    .select('userId firstName lastName')
+    .lean();
+
+  return teachers.map((t) => ({
+    id: t.userId,
+    name: [t.firstName, t.lastName].filter(Boolean).join(' ') || 'Unknown user',
+  }));
+};
+
 module.exports = {
   requestSession,
   listSessionsForUser,
@@ -344,4 +376,5 @@ module.exports = {
   cancelSession,
   deleteSession,
   completeSession,
+  getTeacherDirectory,
 };

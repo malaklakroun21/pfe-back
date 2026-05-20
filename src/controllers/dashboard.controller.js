@@ -39,7 +39,13 @@ const getValidationData = async (req, res, next) => {
 
 const createValidationRequest = async (req, res, next) => {
   try {
-    const request = await dashboardService.createValidationRequest(req.user, req.body);
+    const payload = { ...req.body };
+    if (req.file) {
+      payload.proofFileName = req.file.originalname;
+      payload.proofStoredName = req.file.filename;
+      payload.proofMimeType = req.file.mimetype;
+    }
+    const request = await dashboardService.createValidationRequest(req.user, payload);
     res.status(201).json(new ApiResponse(201, request, 'Validation request created successfully'));
   } catch (error) {
     next(error);

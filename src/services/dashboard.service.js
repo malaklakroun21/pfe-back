@@ -571,13 +571,14 @@ const getOverview = async (currentUser) => {
 
 const getProfile = async (currentUser) => {
   const user = ensureAuthenticatedUser(currentUser);
-  const [skillMap, ratingSummaryMap, reviews, mentorApplications, locationLabelMap] =
+  const [skillMap, ratingSummaryMap, reviews, mentorApplications, locationLabelMap, activeRequests] =
     await Promise.all([
       buildSkillRecordsByUserId([user.userId]),
       buildRatingSummaryMap([user.userId]),
       buildProfileReviews(user.userId),
       MentorApplication.find({ userId: user.userId }).lean(),
       buildLocationLabelMap([user]),
+      ValidationRequest.find({ learnerUserId: user.userId }).lean(),
     ]);
 
   const skillRecords = skillMap.get(user.userId) || [];
@@ -595,19 +596,38 @@ const getProfile = async (currentUser) => {
     totalReviews: 0,
   };
 
+  const requestMap = new Map(
+    activeRequests
+      .sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt))
+      .map((r) => [r.skillId, r])
+  );
+
   const skills =
     skillRecords.length > 0
-      ? skillRecords.map((skill) => ({
-          id: skill.skillId,
-          name: skill.skillName,
-          proficiency: toTitleCase(skill.proficiencyLevel),
-          validationState: skill.validationStatus === 'VALIDATED' ? 'validated' : 'pending',
-        }))
+      ? skillRecords.map((skill) => {
+          const req = requestMap.get(skill.skillId);
+          let validationState = 'pending';
+          if (skill.validationStatus === 'VALIDATED') {
+            validationState = 'validated';
+          } else if (req?.requestStatus === 'REJECTED') {
+            validationState = 'rejected';
+          } else if (req && ['PENDING', 'IN_REVIEW'].includes(req.requestStatus)) {
+            validationState = 'in_review';
+          }
+          return {
+            id: skill.skillId,
+            name: skill.skillName,
+            proficiency: toTitleCase(skill.proficiencyLevel),
+            validationState,
+            validationScore: skill.validationScore || 0,
+          };
+        })
       : (user.offeredSkills || []).map((skillName) => ({
           id: buildSkillKey(skillName),
           name: skillName,
           proficiency: 'Beginner',
           validationState: 'pending',
+          validationScore: 0,
         }));
 
   const documents = [
@@ -667,6 +687,7 @@ const getProfile = async (currentUser) => {
     id: user.userId,
     fullName: buildFullName(user),
     roleLabel: toTitleCase(user.role),
+    profilePicture: user.profilePicture || '',
     rating: ratingSummary.averageRating,
     location: locationLabelMap.get(user.userId) || 'Location not set',
     memberSince: user.createdAt,
@@ -977,7 +998,11 @@ const createValidationRequest = async (currentUser, payload = {}) => {
     learnerUserId: user.userId,
     mentorUserId: mentor.userId,
     requestStatus: 'PENDING',
+    portfolioLink: normalizedPortfolioLink,
     requestNote: normalizedNote,
+    proofFileName: payload.proofFileName || '',
+    proofStoredName: payload.proofStoredName || '',
+    proofMimeType: payload.proofMimeType || '',
   });
 
   if (skill.validationStatus !== 'PENDING') {

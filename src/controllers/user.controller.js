@@ -111,6 +111,15 @@ const removeWantedSkill = async (req, res, next) => {
   }
 };
 
+const changePassword = async (req, res, next) => {
+  try {
+    await userService.changePassword(req.user, req.body);
+    res.status(200).json(new ApiResponse(200, null, 'Password changed successfully'));
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getMe,
   getOfferedSkills,
@@ -124,4 +133,5 @@ module.exports = {
   removeOfferedSkill,
   addWantedSkill,
   removeWantedSkill,
+  changePassword,
 };

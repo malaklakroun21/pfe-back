@@ -2,8 +2,7 @@ const express = require('express');
 
 const dashboardController = require('../controllers/dashboard.controller');
 const protect = require('../middleware/auth.middleware');
-const validate = require('../middleware/validate.middleware');
-const { createValidationRequestSchema } = require('../validators/dashboard.validator');
+const uploadProof = require('../middleware/uploadProof.middleware');
 
 const router = express.Router();
 
@@ -15,7 +14,7 @@ router.get('/explore', dashboardController.getExploreDirectory);
 router.get('/validation', dashboardController.getValidationData);
 router.post(
   '/validation-requests',
-  validate(createValidationRequestSchema),
+  uploadProof,
   dashboardController.createValidationRequest
 );
 

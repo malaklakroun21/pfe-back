@@ -87,6 +87,16 @@ const completeSession = async (req, res, next) => {
   }
 };
 
+// GET /sessions/teachers
+const getTeacherDirectory = async (req, res, next) => {
+  try {
+    const teachers = await sessionService.getTeacherDirectory(req.user);
+    res.status(200).json(new ApiResponse(200, teachers, 'Teacher directory fetched successfully'));
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   requestSession,
   listSessions,
@@ -96,4 +106,5 @@ module.exports = {
   cancelSession,
   deleteSession,
   completeSession,
+  getTeacherDirectory,
 };

@@ -45,6 +45,26 @@ const validationRequestSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+    portfolioLink: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    proofFileName: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    proofStoredName: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    proofMimeType: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     requestNote: {
       type: String,
       default: '',

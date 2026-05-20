@@ -14,9 +14,9 @@ const updateMeSchema = Joi.object({
   languages: Joi.alternatives()
     .try(Joi.array().items(Joi.string().trim()), Joi.string().allow(''))
     .optional(),
-  avatar: Joi.string().trim().uri().optional(),
-  photo: Joi.string().trim().uri().optional(),
-  profilePicture: Joi.string().trim().uri().optional(),
+  avatar: Joi.string().optional(),
+  photo: Joi.string().optional(),
+  profilePicture: Joi.string().optional(),
 })
   .min(1)
   .messages({

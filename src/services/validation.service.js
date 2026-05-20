@@ -182,6 +182,9 @@ const buildMentorRequestView = async (requests) => {
         submittedAt: request.submittedAt,
         respondedAt: request.respondedAt || null,
         validationScore: request.validationScore || 0,
+        portfolioLink: request.portfolioLink || '',
+        proofFileName: request.proofFileName || '',
+        proofStoredName: request.proofStoredName || '',
         requestNote: request.requestNote || '',
         validationFeedback: request.validationFeedback || '',
         rejectionReason: request.rejectionReason || '',
@@ -204,25 +207,27 @@ const buildMentorRequestView = async (requests) => {
 const listMentorValidationRequests = async (currentUser, query = {}) => {
   const mentor = ensureMentorUser(currentUser);
   const status = query.status?.trim().toUpperCase();
-  const filter = { mentorUserId: mentor.userId };
   const allowedStatuses = ['PENDING', 'IN_REVIEW', 'VALIDATED', 'REJECTED'];
 
-  if (status) {
-    if (!allowedStatuses.includes(status)) {
-      throw new ApiError(400, 'Invalid status filter', 'VALIDATION_ERROR');
-    }
-
-    filter.requestStatus = status;
+  if (status && !allowedStatuses.includes(status)) {
+    throw new ApiError(400, 'Invalid status filter', 'VALIDATION_ERROR');
   }
 
-  const requests = await ValidationRequest.find(filter).lean();
-  const items = await buildMentorRequestView(requests);
+  const baseFilter = { mentorUserId: mentor.userId };
+  const filteredFilter = status ? { ...baseFilter, requestStatus: status } : baseFilter;
+
+  const [allRequests, filteredRequests] = await Promise.all([
+    ValidationRequest.find(baseFilter).lean(),
+    ValidationRequest.find(filteredFilter).lean(),
+  ]);
+
+  const items = await buildMentorRequestView(filteredRequests);
 
   return {
     summary: {
-      pending: items.filter((item) => OPEN_REQUEST_STATUSES.includes(item.status)).length,
-      validated: items.filter((item) => item.status === 'VALIDATED').length,
-      rejected: items.filter((item) => item.status === 'REJECTED').length,
+      pending: allRequests.filter((r) => OPEN_REQUEST_STATUSES.includes(r.requestStatus)).length,
+      validated: allRequests.filter((r) => r.requestStatus === 'VALIDATED').length,
+      rejected: allRequests.filter((r) => r.requestStatus === 'REJECTED').length,
     },
     requests: items,
   };
